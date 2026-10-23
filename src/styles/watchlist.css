@@ -1,0 +1,367 @@
+/* 5. Watchlist ------------------------------------------------------------- */
+#side {
+    position: relative;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: 400px;
+    border-left: 1px solid var(--bd);
+    background: var(--bg);
+}
+
+body.flip #side {
+    border-left: 0;
+    border-right: 1px solid var(--bd);
+}
+
+#hd {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    height: 38px;
+    padding: 0 var(--sp-3);
+    border-bottom: 1px solid var(--bd);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+#flt {
+    display: flex;
+    gap: 2px;
+    margin-right: auto;
+}
+
+#flt button,
+#mv {
+    display: grid;
+    place-items: center;
+    padding: 5px var(--sp-2);
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--mu);
+    font-size: 12px;
+}
+
+#flt button:hover,
+#mv:hover {
+    background: var(--pn-hover);
+    color: var(--tx);
+}
+
+#flt button.on {
+    border-color: var(--acc);
+    background: var(--acc-bg);
+    color: var(--tx);
+}
+
+#flt .g {
+    color: var(--up);
+}
+
+#flt .r {
+    color: var(--dn);
+}
+
+/* Column header + rows share one grid so the columns always line up */
+#cols,
+.row {
+    display: grid;
+    grid-template-columns: minmax(0, var(--c1, 1fr)) minmax(0, var(--c2, 1fr)) minmax(0, var(--c3, 1fr));
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+    text-align: center;
+}
+
+#cols {
+    flex: none;
+    height: 32px;
+    padding-right: calc(10px + var(--sbw, 0px));
+    border-bottom: 1px solid var(--bd);
+    color: var(--mu);
+    font-size: 12px;
+    user-select: none;
+}
+
+#cols span {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    cursor: pointer;
+}
+
+#cols span:hover {
+    color: var(--tx);
+}
+
+#cols > span:first-child {
+    display: none;
+}
+
+/* sort arrow takes no width, so the label itself stays exactly centered */
+#cols .a::after {
+    content: "▾";
+    width: 0;
+    margin-left: var(--sp-1);
+    overflow: visible;
+    color: var(--acc);
+}
+
+#cols .a.asc::after {
+    content: "▴";
+}
+
+#list {
+    position: relative;
+    flex: 1;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--bd-strong) transparent;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#sp {
+    position: relative;
+}
+
+#in {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+}
+
+#msg {
+    padding: 20px;
+    color: var(--mu);
+    text-align: center;
+}
+
+.row {
+    position: relative;
+    height: 36px;
+    margin: 0 2px;
+    border-radius: var(--r-sm);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.row:hover {
+    background: var(--pn);
+}
+
+.row.act {
+    background: var(--pn-hover);
+    box-shadow: inset 2px 0 0 var(--acc);
+}
+
+.row.dim {
+    opacity: .35;
+}
+
+.row .p,
+.row .c {
+    min-width: 0;
+    overflow: hidden;
+    font-variant-numeric: tabular-nums;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.p.up,
+.c.g {
+    color: var(--up);
+}
+
+.p.dn,
+.c.r {
+    color: var(--dn);
+}
+
+.nm {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Flag button */
+.fl {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #4a4f60;
+    opacity: 0;
+}
+
+.fl svg {
+    display: block;
+}
+
+.row:hover .fl {
+    opacity: 1;
+}
+
+.fl:hover {
+    color: var(--ico);
+}
+
+.fl.g,
+.fl.r {
+    opacity: 1;
+}
+
+.fl.g {
+    color: var(--up);
+}
+
+.fl.r {
+    color: var(--dn);
+}
+
+/* Section header row */
+.row.sec {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    background: var(--pn);
+    color: var(--mu);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.row.sec:hover {
+    background: var(--pn-hover);
+    color: var(--tx);
+}
+
+.sec .sc {
+    flex: none;
+    width: 12px;
+}
+
+.sec .sn {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sec .sk {
+    font-weight: 600;
+    opacity: .6;
+}
+
+.sni {
+    flex: 1;
+    min-width: 0;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* Drag & drop reordering */
+.row.gh {
+    position: fixed;
+    top: 0;
+    z-index: 70;
+    margin: 0;
+    border: 1px solid var(--acc);
+    background: var(--pn-hover);
+    box-shadow: var(--shadow);
+    opacity: .96;
+    pointer-events: none;
+}
+
+#dl {
+    position: absolute;
+    top: -1px;
+    left: var(--sp-1);
+    right: var(--sp-1);
+    z-index: 6;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--acc);
+    box-shadow: 0 0 6px var(--acc);
+    pointer-events: none;
+}
+
+body.dnd,
+body.dnd * {
+    cursor: grabbing !important;
+    user-select: none;
+}
+
+/* Resize handles: watchlist edge + column dividers */
+#rs {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    z-index: 30;
+    width: 7px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+body.flip #rs {
+    left: auto;
+    right: -3px;
+}
+
+#rs:hover,
+body.drag #rs {
+    background: rgba(41, 98, 255, .35);
+}
+
+.gr {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -10px;
+    z-index: 2;
+    width: 10px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.gr::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 4px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--bd-strong);
+    transition: background .12s;
+}
+
+.gr:hover::after,
+.gr.on::after {
+    background: var(--acc);
+}
+
+body.crs,
+body.crs * {
+    cursor: col-resize !important;
+    user-select: none;
+}
+

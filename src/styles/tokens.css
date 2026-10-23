@@ -1,0 +1,37 @@
+/* ==========================================================================
+   Tview - TradingView-style dark theme
+   Sections: 1 Tokens  2 Base  3 Top bar  4 Chart overlays  5 Watchlist
+             6 Menus & popovers  7 Form controls  8 Color picker
+             9 Drawing tools  10 Responsive
+   ========================================================================== */
+
+/* 1. Tokens ---------------------------------------------------------------- */
+:root {
+    --bg: #131722;
+    --pn: #1e222d;
+    --pn-hover: #2a2e39;
+    --bd: #2a2e39;
+    --bd-strong: #363a45;
+    --tx: #d1d4dc;
+    --mu: #787b86;
+    --ico: #9598a1;
+    --acc: #2962ff;
+    --acc-bg: rgba(41, 98, 255, .16);
+    --up: #089981;
+    --dn: #f23645;
+    --r-sm: 4px;
+    --r-md: 6px;
+    --r-lg: 8px;
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --shadow: 0 4px 16px rgba(0, 0, 0, .5);
+    --font: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif;
+    --dtb: 44px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+}
+

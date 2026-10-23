@@ -1,0 +1,195 @@
+/* 8. Color picker (indicators, candles, drawings) -------------------------- */
+.icolor,
+.dr-color-control {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 160px;
+    max-width: 100%;
+}
+
+#iset .icolor {
+    justify-self: end;
+    min-width: 0;
+}
+
+.icolor-top {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.icolor-toggle,
+.candle-color-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    padding: 4px 7px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-sm);
+    background: var(--pn);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.dr-color-control .icolor-toggle {
+    align-self: flex-start;
+    margin-left: 0;
+}
+
+.icolor-toggle:hover,
+.candle-color-toggle:hover {
+    background: var(--pn-hover);
+}
+
+.icolor-toggle[aria-expanded=true],
+.candle-color-toggle[aria-expanded=true] {
+    border-color: var(--acc);
+}
+
+.icolor-swatch {
+    display: inline-block;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid rgba(255, 255, 255, .33);
+    border-radius: 3px;
+    background: #888;
+}
+
+.icolor-panel,
+.candle-palette,
+.dr-color-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    width: 100%;
+    padding: 6px;
+    border: 1px solid var(--bd-strong);
+    border-radius: 5px;
+    background: var(--bg);
+}
+
+.candle-palette {
+    margin: -4px 0 var(--sp-1);
+    padding: 7px;
+}
+
+
+/* Compact colour palette popovers: overlays rather than expanding settings panels. */
+.icolor-panel {
+    width: 176px;
+    max-width: calc(100vw - 16px);
+    box-shadow: var(--shadow);
+}
+
+.icolor-panel[hidden] { display: none !important; }
+
+/* 48 swatches: 8 columns x 6 rows, one colour family per row */
+/* Color palette component (8 x 8): small square + HEX code under each. Used by indicator, candle, background and drawing colour pickers. */
+.ipal {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 3px;
+    width: 176px;
+    max-width: 100%;
+    margin-bottom: var(--sp-1);
+}
+
+.ipal button.cp-sw {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
+    width: auto;
+    height: auto;
+    padding: 1px;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: var(--mu);
+    cursor: pointer;
+}
+
+.cp-sw > * { pointer-events: none; }
+
+.cp-box {
+    display: block;
+    width: 100%;
+    max-width: 18px;
+    aspect-ratio: 1;
+    border: 1px solid rgba(128, 128, 128, .6); /* keeps white (and black) visible on any background */
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+
+.ipal button.cp-sw:hover,
+.ipal button.cp-sw:focus-visible {
+    background: var(--pn-hover);
+    color: var(--tx);
+    outline: 0;
+}
+
+.ipal button.cp-sw:hover .cp-box,
+.ipal button.cp-sw:focus-visible .cp-box { outline: 1px solid #fff; outline-offset: 1px; }
+
+.ipal button.cp-sw.cp-copied { color: #4caf50; }
+.ipal button.cp-sw.cp-copied .cp-box { outline: 2px solid #4caf50; outline-offset: 1px; }
+
+.icolor-hex,
+.candle-hex,
+.dr-color-panel label,
+.iopacity {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--mu);
+    font-size: 11px;
+}
+
+.icolor-hex label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.candle-hex {
+    margin: var(--sp-2) 0;
+}
+
+.ihex {
+    width: 78px;
+    min-width: 0;
+    padding: 4px;
+    font: 12px ui-monospace, monospace;
+}
+
+#pop .candle-hex,
+#bgset .candle-hex {
+    gap: 8px;
+}
+
+.candle-hex .ihex {
+    width: 90px;
+}
+
+.iopacity {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 6px;
+}
+
+.iopacity input {
+    width: 100%;
+    min-width: 0;
+    accent-color: var(--acc);
+}
+
+.iopacity output {
+    min-width: 30px;
+    color: var(--tx);
+    text-align: right;
+}
+

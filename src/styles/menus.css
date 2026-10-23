@@ -1,0 +1,251 @@
+/* 6. Menus & popovers ------------------------------------------------------ */
+#imenu,
+#ctx,
+#pop,
+#bgset,
+#iset,
+.dr-fly,
+.dr-fb,
+.dr-set,
+.dr-menu {
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-lg);
+    background: var(--pn);
+    box-shadow: var(--shadow);
+}
+
+#imenu,
+#ctx,
+.dr-fly,
+.dr-menu {
+    display: flex;
+    flex-direction: column;
+    padding: var(--sp-1);
+}
+
+/* Shared menu item */
+#imenu button,
+#ctx button,
+.dr-fly button,
+.dr-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px var(--sp-3);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    text-align: left;
+    white-space: nowrap;
+}
+
+#imenu button:hover,
+#ctx button:hover,
+.dr-fly button:hover,
+.dr-menu button:hover {
+    background: var(--pn-hover);
+}
+
+#imenu {
+    position: absolute;
+    top: 42px;
+    left: var(--sp-2);
+    z-index: 20;
+    width: max-content;
+    max-width: calc(100% - 16px);
+    max-height: min(70vh, 520px);
+    max-height: min(70dvh, 520px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#ctx {
+    position: fixed;
+    z-index: 60;
+    min-width: 170px;
+}
+
+.dr-menu {
+    position: fixed;
+    z-index: 60;
+}
+
+.dr-fly {
+    position: absolute;
+    z-index: 30;
+    min-width: 250px;
+    max-height: 70%;
+    overflow: auto;
+}
+
+.dr-fh {
+    padding: 6px var(--sp-3);
+    color: var(--mu);
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.dr-fly span {
+    flex: 1;
+}
+
+.dr-fly em {
+    margin-left: auto;
+    color: var(--mu);
+    font-size: 11px;
+    font-style: normal;
+}
+
+/* Candle settings dialog */
+#pop,
+#bgset {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 230px;
+    padding: var(--sp-3);
+    transform: translate(-50%, -50%);
+    max-width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+#pop label,
+#bgset label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+#pop .ph,
+#bgset .ph {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#pop .ph button,
+#bgset .ph button,
+.dr-x {
+    border: 0;
+    background: none;
+    color: var(--mu);
+    font-size: 14px;
+}
+
+#pop .ph button:hover,
+#bgset .ph button:hover,
+.dr-x:hover {
+    color: var(--tx);
+}
+
+#pop .candle-color-row,
+#bgset .candle-color-row {
+    gap: 10px;
+}
+
+#pop .candle-color-control,
+#bgset .candle-color-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#bgBtns {
+    display: flex;
+    justify-content: flex-end;
+}
+
+#bgBtns button {
+    padding: 5px 10px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-sm);
+    background: var(--pn-hover);
+}
+
+#bgBtns button:hover {
+    background: var(--bd-strong);
+}
+
+#pre {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+#pre button {
+    width: 34px;
+    height: 22px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-sm);
+}
+
+/* Indicator settings panel */
+#iset {
+    position: absolute;
+    top: 40px;
+    left: 54px;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    width: min(320px, calc(100% - 24px));
+    max-height: min(70vh, 520px);
+    max-height: min(70dvh, 520px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 10px;
+}
+
+#iset > label {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    white-space: nowrap;
+    font-size: 11px;
+}
+
+#iset > label > input,
+#iset > label > select {
+    justify-self: end;
+}
+
+ .ih {
+    cursor: move;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.if {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.ih button,
+.if button {
+    padding: 5px 10px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: var(--pn-hover);
+}
+
+.ih button:hover,
+.if button:hover {
+    background: var(--bd-strong);
+}
+

@@ -1,0 +1,386 @@
+/* 9. Drawing tools --------------------------------------------------------- */
+.dr-svg {
+    position: absolute;
+    top: 0;
+    left: var(--dtb);
+    z-index: 3;
+    overflow: hidden;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.dr-svg text {
+    pointer-events: none;
+}
+
+.dr-h {
+    fill: var(--bg);
+    stroke: var(--acc);
+    stroke-width: 2;
+}
+
+.dr-h.lk {
+    stroke: var(--mu);
+}
+
+/* Left toolbar */
+.dr-tb {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 12;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: var(--dtb);
+    padding: 6px 0;
+    border-right: 1px solid var(--bd);
+    background: var(--chart-bg, var(--bg));
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+.dr-tb::-webkit-scrollbar {
+    display: none;
+}
+
+.dr-b {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-md);
+    background: none;
+    color: var(--ico);
+}
+
+.dr-b:hover {
+    background: var(--pn-hover);
+    color: var(--tx);
+}
+
+.dr-b.on {
+    background: var(--acc-bg);
+    color: #5b8cff;
+}
+
+.dr-b:disabled {
+    background: none;
+    opacity: .3;
+    cursor: default;
+}
+
+.dr-b[data-badge]:not([data-badge=""])::after {
+    content: attr(data-badge);
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    color: #5b8cff;
+    font: 700 9px/10px var(--font);
+}
+
+.dr-caret {
+    position: absolute;
+    right: -1px;
+    bottom: 0;
+    width: 10px;
+    border-radius: 3px;
+    color: var(--mu);
+    font-size: 9px;
+    line-height: 12px;
+    text-align: center;
+}
+
+.dr-caret:hover {
+    background: var(--bd-strong);
+    color: var(--tx);
+}
+
+.dr-sep {
+    flex: none;
+    width: 24px;
+    height: 1px;
+    margin: var(--sp-1) 0;
+    background: var(--bd);
+}
+
+/* Floating toolbar for the selected drawing */
+.dr-fb {
+    position: absolute;
+    z-index: 14;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: var(--sp-1) 6px;
+}
+
+.dr-fb input[type=color] {
+    width: 26px;
+}
+
+.dr-fb select {
+    padding: 3px;
+    font-size: 12px;
+}
+
+.dr-fbb {
+    display: grid;
+    place-items: center;
+    padding: var(--sp-1);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--ico);
+}
+
+.dr-fbb:hover {
+    background: var(--pn-hover);
+    color: var(--tx);
+}
+
+.dr-float-color {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.dr-float-color .dr-color-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 1000;
+    width: 178px;
+    box-shadow: var(--shadow);
+}
+
+.dr-hint {
+    position: absolute;
+    bottom: 34px;
+    left: calc(var(--dtb) + 10px);
+    z-index: 6;
+    padding: 5px 9px;
+    border-radius: var(--r-sm);
+    background: rgba(42, 46, 57, .92);
+    color: var(--mu);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.dr-ta {
+    position: absolute;
+    z-index: 40;
+    min-width: 160px;
+    padding: 6px;
+    border: 1px solid var(--acc);
+    border-radius: var(--r-sm);
+    background: var(--pn);
+    color: var(--tx);
+    outline: 0;
+    resize: both;
+}
+
+/* Drawing settings dialog */
+.dr-set {
+    position: absolute;
+    top: 50px;
+    left: calc(var(--dtb) + 60px);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    width: 360px;
+    max-height: calc(100% - 90px);
+}
+
+.dr-sh,
+.dr-sf {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px var(--sp-3);
+}
+
+.dr-sh {
+    align-items: center;
+    border-bottom: 1px solid var(--bd);
+}
+
+.dr-sf {
+    border-top: 1px solid var(--bd);
+}
+
+.dr-sb {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+    overflow: auto;
+}
+
+.dr-sf button {
+    padding: 6px var(--sp-3);
+    border: 1px solid var(--bd-strong);
+    border-radius: 5px;
+    background: var(--pn-hover);
+}
+
+.dr-sf button:hover {
+    background: var(--bd-strong);
+}
+
+.dr-sf .pri {
+    border-color: var(--acc);
+    background: var(--acc);
+    color: #fff;
+}
+
+.dr-sf .pri:hover {
+    background: #1e53e5;
+}
+
+/* settings rows: fixed label column + control column, so every row lines up */
+.dr-row {
+    display: grid;
+    grid-template-columns: 116px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px var(--sp-3);
+}
+
+.dr-row > span {
+    color: var(--mu);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dr-row > input[type=checkbox] {
+    justify-self: start;
+}
+
+.dr-row.col {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+}
+
+.dr-row:has(.dr-color-control) {
+    align-items: start;
+}
+
+.dr-row:has(.dr-color-control) > span {
+    padding-top: 6px;
+}
+
+.dr-row input[type=number],
+.dr-row input[type=text],
+.dr-row input[type=datetime-local],
+.dr-row select {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+}
+
+.dr-row textarea {
+    width: 100%;
+    max-width: none;
+}
+
+/* coordinates table */
+.dr-pts {
+    padding-bottom: var(--sp-2);
+    border-bottom: 1px solid var(--bd);
+}
+
+.dr-pt-h {
+    margin-bottom: 6px;
+    color: var(--tx);
+}
+
+.dr-cr {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) minmax(0, 1.55fr);
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.dr-cr > span {
+    color: var(--mu);
+    font-size: 12px;
+}
+
+.dr-cr-h > span {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+
+.dr-cr input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 5px 6px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-sm);
+    background: var(--bg);
+    color: var(--tx);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    outline: 0;
+}
+
+.dr-cr input:focus {
+    border-color: var(--acc);
+}
+
+.dr-lr {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-1);
+}
+
+.dr-lr input[type=number] {
+    width: 80px;
+}
+
+/* Cursors while a tool is active */
+#cw.dr-draw,
+#cw.dr-draw * {
+    cursor: crosshair !important;
+}
+
+#cw.dr-erase,
+#cw.dr-erase * {
+    cursor: not-allowed !important;
+}
+
+#cw.dr-move,
+#cw.dr-move * {
+    cursor: move !important;
+}
+
+#cw.dr-handle,
+#cw.dr-handle * {
+    cursor: pointer !important;
+}
+
+/* Keep Indicators beside the timeframe buttons on laptop/desktop.
+   The mobile rules below intentionally retain the current flexible layout. */
+@media (min-width: 821px) {
+    #tfs {
+        flex: 0 1 auto;
+        width: max-content;
+        max-width: calc(100% - 140px);
+    }
+
+    #btnInd {
+        margin-left: 0;
+    }
+}
+
