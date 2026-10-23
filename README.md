@@ -1,6 +1,6 @@
-# Tview Chart
+# Trading Chart
 
-A TradingView-style market chart UI for **Binance USDT-M Futures**, written in plain browser JavaScript (no framework, no runtime bundler, no ES modules). It combines a candlestick chart, a watchlist, technical indicators, drawing tools, bar replay and a mobile layout in one page.
+A Trading-style market chart UI for **Binance USDT-M Futures**, written in plain browser JavaScript (no framework, no runtime bundler, no ES modules). It combines a candlestick chart, a watchlist, technical indicators, drawing tools, bar replay and a mobile layout in one page.
 
 > **If you are an AI assistant (or a new developer) reading this file:** sections 2, 5 and 9 contain the rules that matter most. The project is built by *concatenating ordered source fragments into global-scope classic scripts*. It is **not** a module-based app, so normal assumptions about `import`/`export` do not apply. Read section 2 first.
 
