@@ -259,7 +259,7 @@ INDREG.register('dmi', (function () {
 
 /* EMA: seeded with the first source value, then anchored (see INDKIT.setAnchor) so the live value never drifts when older
    candles are loaded. Keeps the value at the last *closed* candle so a live tick is O(1). */
-INDREG.register('ema', makeMAModule('EMA', { len: 9, src: 'close', color: '#ff9800', w: 1 }, {
+INDREG.register('ema', makeMAModule('EMA', { len: 20, src: 'close', color: '#5050FF', w: 1 }, {
     warm: 6, /* ~6*len candles make the seed's influence negligible */
     calc(d, len, s, ind) {
         const n = d.length, o = new Array(n), a = 2 / (len + 1), { srcv } = INDKIT, ai = INDKIT.anchorAt(ind, d), idx = Math.min(len * 6, 5000) - 1;
@@ -696,7 +696,7 @@ INDREG.register('rsi', (function () {
 })());
 
 /* SMA: running sum, O(n) full calc, O(len) live update */
-INDREG.register('sma', makeMAModule('SMA', { len: 20, src: 'close', color: '#2962ff', w: 1 }, {
+INDREG.register('sma', makeMAModule('SMA', { len: 7, src: 'close', color: '#B6B6B6', w: 1 }, {
     calc(d, len, s) {
         const n = d.length, o = [], { srcv } = INDKIT;
         let sum = 0;
@@ -723,7 +723,7 @@ INDREG.register('sma', makeMAModule('SMA', { len: 20, src: 'close', color: '#296
 }));
 
 /* SMMA / RMA: like EMA (anchored, remembers the value at the last closed candle for O(1) live updates). */
-INDREG.register('smma', makeMAModule('SMMA', { len: 14, src: 'close', color: '#e040fb', w: 1 }, {
+INDREG.register('smma', makeMAModule('SMMA', { len: 200, src: 'close', color: '#C880FF', w: 1 }, {
     warm: 12, /* alpha is 1/len, so it needs about twice the history of an EMA */
     calc(d, len, s, ind) {
         const n = d.length, o = [], { srcv } = INDKIT, ai = INDKIT.anchorAt(ind, d), idx = Math.min(len * 12, 5000) - 1;
@@ -783,7 +783,7 @@ INDREG.register('volume', (function () {
 })());
 
 /* Indicator engine: owns the list of active indicators, their chart series, legend, settings panel and menu.
-   All indicator-specific logic lives in modules/*.js (see 00-kit.js for the module contract). */
+   All indicator-specific logic lives in modules/*.js (see core/kit.js for the module contract). */
 var IND = (function () {
     const { colorAlpha } = INDKIT;
     const M = t => INDREG.get(t);
