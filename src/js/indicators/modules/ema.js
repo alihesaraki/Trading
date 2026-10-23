@@ -1,6 +1,6 @@
 /* EMA: seeded with the first source value, then anchored (see INDKIT.setAnchor) so the live value never drifts when older
    candles are loaded. Keeps the value at the last *closed* candle so a live tick is O(1). */
-INDREG.register('ema', makeMAModule('EMA', { len: 9, src: 'close', color: '#ff9800', w: 1 }, {
+INDREG.register('ema', makeMAModule('EMA', { len: 20, src: 'close', color: '#5050FF', w: 1 }, {
     warm: 6, /* ~6*len candles make the seed's influence negligible */
     calc(d, len, s, ind) {
         const n = d.length, o = new Array(n), a = 2 / (len + 1), { srcv } = INDKIT, ai = INDKIT.anchorAt(ind, d), idx = Math.min(len * 6, 5000) - 1;

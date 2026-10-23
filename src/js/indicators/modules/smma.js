@@ -1,5 +1,5 @@
 /* SMMA / RMA: like EMA (anchored, remembers the value at the last closed candle for O(1) live updates). */
-INDREG.register('smma', makeMAModule('SMMA', { len: 14, src: 'close', color: '#e040fb', w: 1 }, {
+INDREG.register('smma', makeMAModule('SMMA', { len: 200, src: 'close', color: '#C880FF', w: 1 }, {
     warm: 12, /* alpha is 1/len, so it needs about twice the history of an EMA */
     calc(d, len, s, ind) {
         const n = d.length, o = [], { srcv } = INDKIT, ai = INDKIT.anchorAt(ind, d), idx = Math.min(len * 12, 5000) - 1;

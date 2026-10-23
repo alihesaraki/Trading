@@ -1,5 +1,5 @@
 /* SMA: running sum, O(n) full calc, O(len) live update */
-INDREG.register('sma', makeMAModule('SMA', { len: 20, src: 'close', color: '#2962ff', w: 1 }, {
+INDREG.register('sma', makeMAModule('SMA', { len: 7, src: 'close', color: '#B6B6B6', w: 1 }, {
     calc(d, len, s) {
         const n = d.length, o = [], { srcv } = INDKIT;
         let sum = 0;
