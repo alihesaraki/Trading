@@ -134,7 +134,7 @@ function render() {
     const key = a + '|' + b + '|' + ver + '|' + sym;
     if (key !== lastKey) { /* rows changed -> rebuild */
         lastKey = key;
-        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Flag: green / red / none">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span><b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span><b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
         if (editing) {
             const i = $('in').querySelector('.sni');
             if (i) {
@@ -177,7 +177,7 @@ $('list').onclick = e => {
     } /* section header: collapse / expand */
     const f = e.target.closest('.fl');
     if (f) {
-        toggleFlag(f.dataset.f);
+        toggleFlag(f.dataset.f, f);
         return;
     }
     const r = e.target.closest('.row');
@@ -212,7 +212,7 @@ $('list').oncontextmenu = e => {
     else
         showMenu(e.clientX, e.clientY, [['Add section', () => addSection(r && r.dataset.s)], ...rst]);
 };
-/* Header click: sort cycle (first direction -> opposite -> default order) */
+/* Header click: sort cycle (first direction <-> opposite; two states only) */
 $('cols').onclick = e => {
     if (e.target.closest('.gr'))
         return;
@@ -224,10 +224,8 @@ $('cols').onclick = e => {
         sortKey = k;
         sortDir = first;
     }
-    else if (sortDir === first)
-        sortDir = -first;
     else
-        sortKey = null;
+        sortDir = -sortDir;
     buildView();
     $('list').scrollTop = 0;
     sched();

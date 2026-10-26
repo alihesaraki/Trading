@@ -119,6 +119,7 @@ function baselineMid() {
 function setBars(d) {
     if (chartType === 'ha') { haArr = []; for (let i = 0; i < d.length; i++) haArr.push(haOf(haArr[i - 1], d[i])); } else haArr = [];
     series.setData(d.map((b, i) => candlePoint(b, d[i - 1], i)));
+    if (typeof scheduleHeaderValues === 'function') scheduleHeaderValues();
     if (!chartAlts.length) return;
     if (chartType === 'baseline') chartAlts[0].applyOptions({ baseValue: { type: 'price', price: baselineMid() } });
     const cols = chartAlts.map(() => []);
@@ -134,6 +135,7 @@ function updateBar(b) {
         haArr[i] = haOf(haArr[i - 1], b);
     }
     series.update(candlePoint(b, prev, i));
+    if (typeof scheduleHeaderValues === 'function') scheduleHeaderValues();
     altPoints(b, prev).forEach((pt, k) => chartAlts[k] && chartAlts[k].update(pt));
 }
 /* rebuild after a colour / type change */

@@ -55,39 +55,54 @@ body.resizing-oscillator { cursor: row-resize !important; user-select: none; }
     text-align: center;
 }
 
-/* Symbol title + change */
+/* Chart header (TradingView status line): symbol name + chart value + bar change */
 #tl {
     position: absolute;
     top: var(--sp-2);
     left: calc(var(--dtb) + var(--sp-3));
     z-index: 6;
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: var(--sp-2);
+    column-gap: var(--sp-2);
+    row-gap: 2px;
     max-width: calc(100% - var(--dtb) - 90px);
-    font-size: 12px;
-    line-height: 14px;
-    white-space: nowrap;
-    overflow: hidden;
+    line-height: 18px;
     pointer-events: none;
 }
 
+#tl [hidden] { display: none; }
+
 #ttl {
+    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 500;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-#chg {
-    flex: none;
-    font-size: 12px;
+#hv {
+    min-width: 0;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
+
+.hv-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 6px;
+}
+
+.hv-i { display: inline-flex; gap: 3px; }
 
 /* Indicator legend */
 #lg {
     position: absolute;
-    top: 28px;
+    top: var(--lg-top, 28px);
     left: calc(var(--dtb) + var(--sp-3));
     z-index: 6;
     display: flex;

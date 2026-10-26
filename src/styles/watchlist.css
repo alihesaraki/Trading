@@ -65,6 +65,10 @@ body.flip #side {
     color: var(--dn);
 }
 
+#flt .b {
+    color: var(--flag-blue);
+}
+
 /* Column header + rows share one grid so the columns always line up */
 #cols,
 .row {
@@ -221,7 +225,8 @@ body.flip #side {
 }
 
 .fl.g,
-.fl.r {
+.fl.r,
+.fl.b {
     opacity: 1;
 }
 
@@ -231,6 +236,54 @@ body.flip #side {
 
 .fl.r {
     color: var(--dn);
+}
+
+.fl.b {
+    color: var(--flag-blue);
+}
+
+/* Flag color picker popup */
+#flpick {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--bd, #2a2e39);
+    border-radius: 6px;
+    background: var(--bg2, #1e222d);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+}
+
+#flpick .sw {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    color: var(--ico);
+    cursor: pointer;
+}
+
+#flpick .sw:hover,
+#flpick .sw.on {
+    background: var(--acc-bg);
+    border-color: var(--acc);
+}
+
+#flpick .sw.g {
+    color: var(--up);
+}
+
+#flpick .sw.r {
+    color: var(--dn);
+}
+
+#flpick .sw.b {
+    color: var(--flag-blue);
 }
 
 /* Section header row */

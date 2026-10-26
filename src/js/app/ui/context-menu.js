@@ -57,6 +57,6 @@ $('cw').addEventListener('contextmenu', e => {
         const t = p.toFixed(map[sym] ? map[sym].dec : 2);
         items.push([`Copy price ${t}`, () => copyText(t)]);
     }
-    items.push(['Settings…', () => setTimeout(openCandleSet, 0)]);
+    items.push(['Setting', () => setTimeout(openCandleSet, 0)]);
     showMenu(e.clientX, e.clientY, items);
 });

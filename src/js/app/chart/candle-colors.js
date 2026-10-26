@@ -113,6 +113,7 @@ pop.addEventListener('input', e => {
         applyCandleCfg();
         return;
     }
+    if (t.dataset.stHdr) { setHeaderOpt(t.dataset.stHdr, t.checked); return; } /* Status line: Symbol name / Chart value / Bar change */
     if (t.dataset.stLine === 'width') { lineCfg.width = clamp(+t.value || 2, 1, 4); store.set('lineCfg', lineCfg); restyleChart(); return; }
     if (typeof canvasInput === 'function' && canvasInput(t)) return;
 });
@@ -127,7 +128,7 @@ pop.addEventListener('click', e => {
     if (pre) { setColors(...PRE[+pre.dataset.pre]); renderSettings(); return; }
     if (e.target.closest('#stOk') || e.target.closest('#popX')) { pop.hidden = true; closePal(); return; }
     if (e.target.closest('#stReset')) {
-        if (stTab === 'symbol') { Object.assign(lineCfg, LINE_DEFAULT); store.set('lineCfg', lineCfg); const d = JSON.parse(JSON.stringify(CANDLE_DEFAULT)); for (const k of Object.keys(d)) candleCfg[k] = d[k]; applyCandleCfg(); }
+        if (stTab === 'symbol') { Object.assign(lineCfg, LINE_DEFAULT); store.set('lineCfg', lineCfg); const d = JSON.parse(JSON.stringify(CANDLE_DEFAULT)); for (const k of Object.keys(d)) candleCfg[k] = d[k]; applyCandleCfg(); resetHeaderCfg(); }
         else if (typeof resetCanvas === 'function') resetCanvas();
         renderSettings();
         return;
@@ -151,6 +152,8 @@ function renderSymbol() {
         if (chartType !== 'hilo') h += row('Line thickness', `<select data-st-line="width">${[1, 2, 3, 4].map(w => `<option value="${w}"${w === lineCfg.width ? ' selected' : ''}>${w}px</option>`).join('')}</select>`);
         if (chartType === 'hlcarea') h += row('High / Low lines', swatch('body.up') + swatch('body.dn'));
     }
+    h += `<div class="st-sec">STATUS LINE</div>`;
+    h += [['name', 'Symbol name'], ['values', 'Chart value'], ['change', 'Bar change']].map(([k, l]) => row(`<label class="st-chk"><input type="checkbox" data-st-hdr="${k}" ${headerCfg[k] ? 'checked' : ''}><span>${l}</span></label>`, '')).join('');
     h += `<div class="st-sec">PRESETS</div><div class="st-row"><div id="pre">${PRE.map((p, i) => `<button type="button" data-pre="${i}" title="${p[0]} / ${p[1]}" style="background:linear-gradient(90deg,${p[0]} 50%,${p[1]} 50%)"></button>`).join('')}</div></div>`;
     h += `<p class="st-note">Chart type is changed from the button next to Indicators.</p>`;
     return h;
