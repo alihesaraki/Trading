@@ -16,7 +16,7 @@ async function loadChart(first, force) {
         $('ld').style.display = 'none';
         window.RP && RP.afterData(); /* replay carried over a symbol / timeframe switch */
         validatePriceScaleForData();
-        series.setData(data);
+        setBars(data);
         syncFut();
         const l = data[data.length - 1];
         lastClose = l.close;
@@ -67,7 +67,7 @@ async function loadChart(first, force) {
     $('ld').style.display = 'none';
     window.RP && RP.afterData();
     validatePriceScaleForData();
-    series.setData(data);
+    setBars(data);
     syncFut();
     const l = k[k.length - 1];
     lastClose = +l[4];

@@ -310,10 +310,17 @@ var IND = (function () {
     });
     addEventListener('pointerup', () => { settingsDrag = null; });
     addEventListener('pointercancel', () => { settingsDrag = null; });
+    /* TradingView layout: one window with an Inputs tab (calculation) and a Style tab (colours, lines, plots) */
+    let setTab = store.get('isTab', 'inputs') === 'style' ? 'style' : 'inputs';
     function openSet(ind, row) {
         setId = ind.id;
-        const D = M(ind.t);
-        $('iset').innerHTML = `<div class="ih"><b>${D.name}</b><button type="button" data-a="close" title="Close settings" aria-label="Close ${D.name} settings">✕</button></div>${[...D.fields.filter(f => f.t !== 'c'), ...D.fields.filter(f => f.t === 'c')].map(f => field(ind, f)).join('')}<div class="if"><button data-a="def">Defaults</button></div>`;
+        const D = M(ind.t), { tabOf } = INDKIT, inputs = D.fields.filter(f => tabOf(f) === 'inputs'), style = D.fields.filter(f => tabOf(f) === 'style');
+        const tabs = [['inputs', 'Inputs', inputs], ['style', 'Style', style]].filter(t => t[2].length);
+        if (!tabs.some(t => t[0] === setTab)) setTab = tabs[0][0];
+        $('iset').innerHTML = `<div class="ih"><b>${D.name}</b><button type="button" data-a="close" title="Close settings" aria-label="Close ${D.name} settings">✕</button></div>`
+            + (tabs.length > 1 ? `<div class="itabs" role="tablist">${tabs.map(t => `<button type="button" role="tab" data-itab="${t[0]}" class="${t[0] === setTab ? 'on' : ''}" aria-selected="${t[0] === setTab}">${t[1]}</button>`).join('')}</div>` : '')
+            + tabs.map(t => `<div class="ipane" data-ipane="${t[0]}"${t[0] === setTab ? '' : ' hidden'}>${t[2].map(f => field(ind, f)).join('')}</div>`).join('')
+            + `<div class="if"><button data-a="def">Defaults</button></div>`;
         $('iset').hidden = false;
         const area = $('cw').getBoundingClientRect(), rr = row.getBoundingClientRect();
         $('iset').style.left = Math.max(0, Math.min(area.width - $('iset').offsetWidth, rr.left - area.left)) + 'px';
@@ -355,6 +362,13 @@ var IND = (function () {
         changed(ind);
     });
     $('iset').addEventListener('click', e => {
+        const tabBtn = e.target.closest('[data-itab]');
+        if (tabBtn) {
+            setTab = tabBtn.dataset.itab; store.set('isTab', setTab);
+            $('iset').querySelectorAll('[data-itab]').forEach(b => { const on = b === tabBtn; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+            $('iset').querySelectorAll('[data-ipane]').forEach(p => { p.hidden = p.dataset.ipane !== setTab; p.querySelectorAll('.icolor-panel').forEach(x => { x.hidden = true; }); });
+            return;
+        }
         const toggle = e.target.closest('[data-color-toggle]');
         if (toggle) { const k = toggle.dataset.colorToggle, panel = $('iset').querySelector(`[data-color-panel="${k}"]`), wasOpen = panel && !panel.hidden; $('iset').querySelectorAll('.icolor-panel').forEach(p => { p.hidden = true; p.style.position = ''; }); $('iset').querySelectorAll('[data-color-toggle]').forEach(b => b.setAttribute('aria-expanded', 'false')); if (panel && !wasOpen) { const tr = toggle.getBoundingClientRect(), pr = $('iset').getBoundingClientRect(); panel.hidden = false; panel.style.position = 'fixed'; panel.style.zIndex = '1000'; panel.style.left = Math.max(8, Math.min(window.innerWidth - 190, pr.left + Math.max(0, Math.min(pr.width - 190, tr.right - pr.left - 190)))) + 'px'; panel.style.top = (tr.bottom + 4 + 150 < window.innerHeight ? tr.bottom + 4 : Math.max(8, tr.top - 154)) + 'px'; toggle.setAttribute('aria-expanded', 'true'); } return; }
         const target = e.target.closest('[data-palette]');
@@ -451,6 +465,7 @@ var IND = (function () {
         $('imenu').hidden = !open;
         $('btnInd').setAttribute('aria-expanded', String(open));
         $('pop').hidden = true;
+        if (typeof closeTypeMenu === 'function') closeTypeMenu();
         if (open)
             positionIndicatorMenu();
     };
@@ -543,7 +558,8 @@ var IND = (function () {
     store.set('indsV', 2);
     store.get('inds', []).filter(x => M(x.t)).forEach(x => {
         const ind = { t: x.t, p: Object.assign({}, M(x.t).defaults, x.p), v: x.v !== false };
-        if (x.t === 'dmi' && ind.p.ca === '#ff9800') ind.p.ca = '#2962FF'; /* ADX default colour is now blue */
+        /* DMI: earlier default colours (green / red / blue) -> TradingView's (blue / orange / red) */
+        if (x.t === 'dmi' && (ind.p.ca === '#ff9800' || (ind.p.cp === '#26a69a' && ind.p.cm === '#ef5350' && /^#2962ff$/i.test(ind.p.ca)))) Object.assign(ind.p, { cp: '#2962FF', cm: '#FF6D00', ca: '#F23645' });
         if (migrate && 'w' in ind.p)
             ind.p.w = 1;
         create(ind);

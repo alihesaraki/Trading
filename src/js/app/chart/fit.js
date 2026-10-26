@@ -70,7 +70,7 @@ async function resetChartView() {
             }
             data = older.concat(data);
             validatePriceScaleForData();
-            series.setData(data);
+            setBars(data);
             window.IND && IND.full();
             // Reapply only after the missing bars are available; this still targets the newest bars.
             applyResetViewport();

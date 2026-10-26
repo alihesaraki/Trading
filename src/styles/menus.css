@@ -2,7 +2,7 @@
 #imenu,
 #ctx,
 #pop,
-#bgset,
+#typemenu,
 #iset,
 .dr-fly,
 .dr-fb,
@@ -15,6 +15,7 @@
 }
 
 #imenu,
+#typemenu,
 #ctx,
 .dr-fly,
 .dr-menu {
@@ -25,6 +26,7 @@
 
 /* Shared menu item */
 #imenu button,
+#typemenu button,
 #ctx button,
 .dr-fly button,
 .dr-menu button {
@@ -41,6 +43,7 @@
 }
 
 #imenu button:hover,
+#typemenu button:hover,
 #ctx button:hover,
 .dr-fly button:hover,
 .dr-menu button:hover {
@@ -100,97 +103,6 @@
     font-style: normal;
 }
 
-/* Candle settings dialog */
-#pop,
-#bgset {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-width: 230px;
-    padding: var(--sp-3);
-    transform: translate(-50%, -50%);
-    max-width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
-    max-height: calc(100vh - 24px);
-    max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
-    overflow: auto;
-    overscroll-behavior: contain;
-}
-
-#pop label,
-#bgset label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-}
-
-#pop .ph,
-#bgset .ph {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-#pop .ph button,
-#bgset .ph button,
-.dr-x {
-    border: 0;
-    background: none;
-    color: var(--mu);
-    font-size: 14px;
-}
-
-#pop .ph button:hover,
-#bgset .ph button:hover,
-.dr-x:hover {
-    color: var(--tx);
-}
-
-#pop .candle-color-row,
-#bgset .candle-color-row {
-    gap: 10px;
-}
-
-#pop .candle-color-control,
-#bgset .candle-color-control {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-#bgBtns {
-    display: flex;
-    justify-content: flex-end;
-}
-
-#bgBtns button {
-    padding: 5px 10px;
-    border: 1px solid var(--bd-strong);
-    border-radius: var(--r-sm);
-    background: var(--pn-hover);
-}
-
-#bgBtns button:hover {
-    background: var(--bd-strong);
-}
-
-#pre {
-    display: flex;
-    gap: 6px;
-    margin-top: 2px;
-}
-
-#pre button {
-    width: 34px;
-    height: 22px;
-    border: 1px solid var(--bd-strong);
-    border-radius: var(--r-sm);
-}
-
 /* Indicator settings panel */
 #iset {
     position: absolute;
@@ -208,7 +120,7 @@
     padding: 10px;
 }
 
-#iset > label {
+#iset .ipane > label {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 112px;
     align-items: center;
@@ -218,8 +130,8 @@
     font-size: 11px;
 }
 
-#iset > label > input,
-#iset > label > select {
+#iset .ipane > label > input,
+#iset .ipane > label > select {
     justify-self: end;
 }
 
@@ -249,3 +161,31 @@
     background: var(--bd-strong);
 }
 
+
+/* Indicator settings: Inputs / Style tabs (TradingView) */
+.itabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--bd);
+}
+
+.itabs button {
+    padding: 7px 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--mu);
+    font-weight: 500;
+}
+
+.itabs button:hover { color: var(--tx); }
+.itabs button.on { border-bottom-color: var(--acc); color: var(--tx); }
+
+.ipane {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.ipane[hidden] { display: none; }

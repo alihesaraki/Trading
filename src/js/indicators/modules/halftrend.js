@@ -74,8 +74,8 @@ INDREG.register('halftrend', (function () {
             const key = trend === 0 ? 'up' : 'dn', col = colorAlpha(p, key), dev = p.dev * a2;
             L.push({ time: b.time, value: v, color: col });
             if (!isNaN(dev)) {
-                H.push({ time: b.time, value: v + dev, color: rgba(p[key], .4 * Math.max(0, Math.min(100, +(p[key + 'Opacity'] ?? 100)) / 100)) });
-                Lo.push({ time: b.time, value: v - dev, color: rgba(p[key], .4 * Math.max(0, Math.min(100, +(p[key + 'Opacity'] ?? 100)) / 100)) });
+                H.push({ time: b.time, value: v + dev });
+                Lo.push({ time: b.time, value: v - dev });
             }
             if (!isNaN(a2)) {
                 if (buy)
@@ -85,19 +85,70 @@ INDREG.register('halftrend', (function () {
             }
         }
         ind.mk = p.ar ? mk : [];
+        ind.fx = { L, H, Lo };
         return [L, H, Lo];
+    }
+    /* Ribbons: the area between the HalfTrend line and each ATR band (upper band = sell colour, lower band = buy colour). */
+    function makePrimitive(ind) {
+        let request = null;
+        const ts = () => chart.timeScale();
+        const ribbon = (c, line, band, s, color) => {
+            const r = ts().getVisibleRange();
+            if (!r || !line.length || !band.length) return;
+            const bm = new Map(band.map(q => [q.time, q.value])), pts = [];
+            for (const q of line) {
+                const bv = bm.get(q.time);
+                if (bv == null) continue;
+                const x = ts().timeToCoordinate(q.time), y1 = s.priceToCoordinate(q.value), y2 = s.priceToCoordinate(bv);
+                if (x != null && y1 != null && y2 != null) pts.push({ x, y1, y2 });
+            }
+            if (pts.length < 2) return;
+            c.beginPath();
+            pts.forEach((q, i) => i ? c.lineTo(q.x, q.y1) : c.moveTo(q.x, q.y1));
+            for (let i = pts.length - 1; i >= 0; i--) c.lineTo(pts[i].x, pts[i].y2);
+            c.closePath();
+            c.fillStyle = color; c.fill();
+        };
+        const view = {
+            zOrder: () => 'bottom',
+            renderer: () => ({
+                draw: target => target.useMediaCoordinateSpace(({ context: c }) => {
+                    const fx = ind.fx, p = ind.p, s = ind.s && ind.s[0];
+                    if (!ind.v || !p.ch || !fx || !s) return;
+                    c.save();
+                    ribbon(c, fx.L, fx.H, s, rgba(p.dn, .12 * opac(p, 'dn')));
+                    ribbon(c, fx.L, fx.Lo, s, rgba(p.up, .12 * opac(p, 'up')));
+                    c.restore();
+                })
+            })
+        };
+        return {
+            attached: params => { request = params.requestUpdate; },
+            detached: () => { request = null; },
+            updateAllViews: () => {},
+            paneViews: () => [view],
+            requestUpdate: () => { if (request) request(); }
+        };
     }
     return {
         name: 'HalfTrend', markers: true,
-        fields: [{ k: 'amp', l: 'Amplitude', t: 'n', min: 1, max: 100, step: 1 }, { k: 'dev', l: 'Channel deviation', t: 'n', min: 0.1, max: 20, step: 0.1 }, WID, { k: 'up', l: 'Up color', t: 'c' }, { k: 'dn', l: 'Down color', t: 'c' }, { k: 'ar', l: 'Buy/Sell arrows', t: 'b' }, { k: 'ch', l: 'Channels', t: 'b' }],
-        defaults: { amp: 2, dev: 2, w: 1, up: '#2962ff', dn: '#f23645', ar: false, ch: false },
-        create: () => [line(), line(), line()],
+        fields: [{ k: 'amp', l: 'Amplitude', t: 'n', min: 1, max: 100, step: 1 }, { k: 'dev', l: 'Channel deviation', t: 'n', min: 0.1, max: 20, step: 0.1 }, WID, { k: 'up', l: 'Up color', t: 'c' }, { k: 'dn', l: 'Down color', t: 'c' }, { k: 'ar', l: 'Show arrows', t: 'b', tab: 'inputs' }, { k: 'ch', l: 'Show channels', t: 'b', tab: 'inputs' }],
+        defaults: { amp: 2, dev: 2, w: 1, up: '#2962ff', dn: '#f23645', ar: true, ch: true },
+        create: ind => {
+            const s = [line(), line(), line()];
+            if (typeof s[0].attachPrimitive === 'function') { ind.prim = makePrimitive(ind); s[0].attachPrimitive(ind.prim); }
+            return s;
+        },
         calc: (d, p, ind) => ht(d, p, ind),
+        clear(ind) { ind.fx = null; ind.mk = []; if (ind.prim) ind.prim.requestUpdate(); },
+        destroy(ind) { if (ind.prim) { try { ind.s[0].detachPrimitive(ind.prim); } catch (e) { /* series already removed */ } ind.prim = null; } },
         style(ind) {
             const p = ind.p;
             ind.s[0].applyOptions({ color: colorAlpha(p, 'up'), lineWidth: p.w, visible: ind.v });
-            ind.s[1].applyOptions({ color: rgba(p.up, .4 * opac(p, 'up')), lineWidth: p.w, visible: ind.v && p.ch });
-            ind.s[2].applyOptions({ color: rgba(p.dn, .4 * opac(p, 'dn')), lineWidth: p.w, visible: ind.v && p.ch });
+            /* upper band = sell colour, lower band = buy colour (as in the TradingView script) */
+            ind.s[1].applyOptions({ color: rgba(p.dn, .6 * opac(p, 'dn')), lineWidth: p.w, visible: ind.v && p.ch });
+            ind.s[2].applyOptions({ color: rgba(p.up, .6 * opac(p, 'up')), lineWidth: p.w, visible: ind.v && p.ch });
+            if (ind.prim) ind.prim.requestUpdate();
         },
         label: ind => `HalfTrend ${ind.p.amp} ${ind.p.dev}`,
         color: p => p.up,

@@ -166,8 +166,7 @@
     font: 12px ui-monospace, monospace;
 }
 
-#pop .candle-hex,
-#bgset .candle-hex {
+#pop .candle-hex {
     gap: 8px;
 }
 

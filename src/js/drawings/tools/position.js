@@ -46,37 +46,29 @@
     hotkey: side === "long" ? "Ctrl+Alt+Shift+L" : "Ctrl+Alt+Shift+S",
     hideCoords: true,
     fields: [
-      { key: "points.0.price", label: "Entry price", type: "number", step: "any", get: (d2) => clean(d2.points[0].price), set: (d2, v, m) => {
+      { key: "points.0.price", label: "Entry price", type: "number", step: "any", get: (d2, m) => fmtPrice(d2.points[0].price, m.decimals()), set: (d2, v, m) => {
         const dir = side === "long" ? 1 : -1, tick = tickOf(m), P = d2.points;
         const lo = (dir > 0 ? P[2].price : P[1].price) + tick, hi = (dir > 0 ? P[1].price : P[2].price) - tick;
         P[0].price = Math.min(Math.max(v, lo), Math.max(lo, hi));
         P[3].price = P[0].price;
       } },
-      { key: "points.1.price", label: "Target price", type: "number", step: "any", get: (d2) => clean(d2.points[1].price), set: (d2, v, m) => {
-        const dir = side === "long" ? 1 : -1, lim = d2.points[0].price + dir * tickOf(m);
-        d2.points[1].price = dir > 0 ? Math.max(v, lim) : Math.min(v, lim);
-      } },
-      { key: "points.2.price", label: "Stop price", type: "number", step: "any", get: (d2) => clean(d2.points[2].price), set: (d2, v, m) => {
+      { key: "points.2.price", label: "Stop loss", type: "number", step: "any", get: (d2, m) => fmtPrice(d2.points[2].price, m.decimals()), set: (d2, v, m) => {
         const dir = side === "long" ? 1 : -1, lim = d2.points[0].price - dir * tickOf(m);
         d2.points[2].price = dir > 0 ? Math.min(v, lim) : Math.max(v, lim);
       } },
-      { key: "points.rr", label: "Risk/Reward", type: "number", min: 0.01, step: 0.1, get: (d2) => {
+      { key: "points.1.price", label: "Take profit", type: "number", step: "any", get: (d2, m) => fmtPrice(d2.points[1].price, m.decimals()), set: (d2, v, m) => {
+        const dir = side === "long" ? 1 : -1, lim = d2.points[0].price + dir * tickOf(m);
+        d2.points[1].price = dir > 0 ? Math.max(v, lim) : Math.min(v, lim);
+      } },
+      { key: "points.rr", label: "Risk/Reward ratio", type: "number", min: 0.01, step: "any", get: (d2) => {
         const k = Math.abs(d2.points[0].price - d2.points[2].price);
         return k > 0 ? +(Math.abs(d2.points[1].price - d2.points[0].price) / k).toFixed(2) : 0;
       }, set: (d2, v) => {
         const k = Math.abs(d2.points[0].price - d2.points[2].price);
         if (k > 0) d2.points[1].price = clean(d2.points[0].price + (side === "long" ? 1 : -1) * k * Math.max(0.01, v));
       } },
-      { key: "props.account", label: "Account size", type: "number", min: 1, max: 1e12, step: 100 },
-      { key: "props.riskPct", label: "Risk %", type: "number", min: 0.01, max: 100, step: 0.25 },
-      { key: "props.leverage", label: "Leverage", type: "number", min: 1, max: 1e3, step: 1 },
-      { key: "props.feePct", label: "Fee % per side", type: "number", min: 0, max: 5, step: 0.01 },
-      { key: "props.qtyDec", label: "Qty decimals", type: "number", min: 0, max: 8, step: 1 },
-      { key: "props.currency", label: "Currency", type: "text" },
       { key: "props.profitColor", label: "Profit color", type: "color", get: (d2) => d2.props.profitColor || GREEN },
-      { key: "props.stopColor", label: "Stop color", type: "color", get: (d2) => d2.props.stopColor || RED },
-      F.textColor,
-      F.fontSize
+      { key: "props.stopColor", label: "Stop color", type: "color", get: (d2) => d2.props.stopColor || RED }
     ],
     props: { account: 1e4, riskPct: 1, leverage: 1, feePct: 0, qtyDec: 3, currency: "USDT", profitColor: GREEN, stopColor: RED },
     style: { fontSize: 12 },

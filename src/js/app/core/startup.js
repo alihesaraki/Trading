@@ -1,3 +1,3 @@
 /* ---------- Start ---------- */
-setColors(cUp, cDn);
+applyCandleCfg(false);
 refresh(true).then(() => { loadChart(true); connect(); });

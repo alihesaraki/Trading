@@ -9,7 +9,7 @@ function applyBar(b) {
     if (b.time === l) {
         data[n - 1] = b;
         validatePriceScaleForData();
-        series.update(b);
+        updateBar(b);
         return;
     }
     if (b.time < l)
@@ -18,7 +18,7 @@ function applyBar(b) {
     const ts = chart.timeScale(), rg = ts.getVisibleLogicalRange(), follow = !!rg && rg.from <= n - 1 && rg.to >= n - 1;
     data.push(b);
     validatePriceScaleForData();
-    series.update(b);
+    updateBar(b);
     syncFut();
     if (follow)
         ts.setVisibleLogicalRange({ from: rg.from + 1, to: rg.to + 1 });

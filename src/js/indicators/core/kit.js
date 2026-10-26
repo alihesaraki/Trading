@@ -16,7 +16,11 @@ var INDREG = (function () {
 })();
 var INDKIT = (function () {
     const SRCS = ['close', 'open', 'high', 'low', 'hl2', 'hlc3', 'ohlc4'];
-    const LEN = { k: 'len', l: 'Length', t: 'n', min: 1, max: 500, step: 1 }, SRCF = { k: 'src', l: 'Source', t: 's', o: SRCS }, COL = { k: 'color', l: 'Color', t: 'c' }, WID = { k: 'w', l: 'Line width', t: 'n', min: 1, max: 5, step: 1 };
+    const LSTY = ['Solid', 'Dotted', 'Dashed', 'Large dashed'], LSTY_N = { Solid: 0, Dotted: 1, Dashed: 2, 'Large dashed': 3 };
+    const LEN = { k: 'len', l: 'Length', t: 'n', min: 1, max: 500, step: 1 }, SRCF = { k: 'src', l: 'Source', t: 's', o: SRCS }, COL = { k: 'color', l: 'Color', t: 'c' }, WID = { k: 'w', l: 'Thickness', t: 'n', min: 1, max: 5, step: 1 };
+    const OFFF = { k: 'off', l: 'Offset', t: 'n', min: -500, max: 500, step: 1 };
+    /* Settings window = TradingView's tabs: Inputs (calculation) / Style (colours, lines, plots). A field says which tab it lives on. */
+    const tabOf = f => f.tab || (f.t === 'c' || f.t === 'b' && /^show/.test(f.k) || /Style$/.test(f.k) || f.k === 'w' || f.k === 'op' ? 'style' : 'inputs');
     const rgba = (h, a) => { const hex = /^#[0-9a-f]{6}$/i.test(String(h)) ? String(h) : '#888888'; const n = parseInt(hex.slice(1), 16); const alpha = Math.max(0, Math.min(1, Number(a) || 0)); return alpha === 0 ? 'rgba(0,0,0,0)' : `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${alpha})`; };
     const opac = (p, k) => Math.max(0, Math.min(100, +(p[k + 'Opacity'] ?? 100))) / 100;
     const colorAlpha = (p, k) => rgba(p[k], opac(p, k));
@@ -29,5 +33,5 @@ var INDKIT = (function () {
     const findTime = (d, t) => { let lo = 0, hi = d.length - 1; while (lo <= hi) { const m = (lo + hi) >> 1; if (d[m].time === t) return m; d[m].time < t ? lo = m + 1 : hi = m - 1; } return -1; };
     const anchorAt = (ind, d) => { const a = ind.anchor; if (!a) return -1; const i = findTime(d, a.time); if (i < 0) ind.anchor = null; return i; };
     const setAnchor = (ind, d, idx, value) => { if (ind.settled && !ind.anchor && idx >= 0 && idx < d.length) ind.anchor = { time: d[idx].time, value }; };
-    return { anchorAt, setAnchor, SRCS, LEN, SRCF, COL, WID, rgba, opac, colorAlpha, srcv, cmp, fv, line };
+    return { anchorAt, setAnchor, SRCS, LEN, SRCF, COL, WID, OFFF, LSTY, LSTY_N, tabOf, rgba, opac, colorAlpha, srcv, cmp, fv, line };
 })();

@@ -1,4 +1,23 @@
   // math
+  /* Adaptive price text. Never fewer decimals than the symbol's own (dec); small prices get up to 8 decimals,
+     large prices only as many as keep the value readable. Zeros beyond the symbol's decimals are trimmed. */
+  function fmtPrice(p, dec = 2) {
+    const v = +p;
+    if (!Number.isFinite(v)) return "";
+    const a = Math.abs(v);
+    const want = a >= 1e3 ? 2 : a >= 100 ? 3 : a >= 1 ? 4 : a >= 0.1 ? 5 : a >= 0.01 ? 6 : a >= 0.001 ? 7 : 8;
+    const keep = Math.max(0, Math.min(8, dec | 0));
+    const places = Math.min(8, Math.max(keep, want));
+    let t = v.toFixed(places);
+    if (places > keep) {
+      t = t.replace(/0+$/, "");
+      const i = t.indexOf(".");
+      const have = i < 0 ? 0 : t.length - i - 1;
+      if (have < keep) t = v.toFixed(keep);
+      else if (t.endsWith(".")) t = t.slice(0, -1);
+    }
+    return t;
+  }
   var dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   function distToSegment(p, a, b) {
     const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
@@ -46,18 +65,29 @@
     return m;
   }
   function simplify(pts2, eps) {
-    if (pts2.length < 3) return pts2.slice();
-    let idx = 0, dmax = 0;
-    for (let i = 1; i < pts2.length - 1; i++) {
-      const d2 = distToSegment(pts2[i], pts2[0], pts2[pts2.length - 1]);
-      if (d2 > dmax) {
-        dmax = d2;
-        idx = i;
+    const n = pts2.length;
+    if (n < 3) return pts2.slice();
+    const keep = new Uint8Array(n);
+    keep[0] = keep[n - 1] = 1;
+    const stack = [0, n - 1];
+    while (stack.length) {
+      const hi = stack.pop(), lo = stack.pop();
+      let idx = -1, dmax = eps;
+      for (let i = lo + 1; i < hi; i++) {
+        const d2 = distToSegment(pts2[i], pts2[lo], pts2[hi]);
+        if (d2 > dmax) {
+          dmax = d2;
+          idx = i;
+        }
+      }
+      if (idx > 0) {
+        keep[idx] = 1;
+        stack.push(lo, idx, idx, hi);
       }
     }
-    if (dmax <= eps) return [pts2[0], pts2[pts2.length - 1]];
-    const l = simplify(pts2.slice(0, idx + 1), eps), r = simplify(pts2.slice(idx), eps);
-    return l.slice(0, -1).concat(r);
+    const out = [];
+    for (let i = 0; i < n; i++) if (keep[i]) out.push(pts2[i]);
+    return out;
   }
   function arrowHead(from, tip, size) {
     const ang = Math.atan2(tip.y - from.y, tip.x - from.x), s = Math.PI / 7;

@@ -35,7 +35,7 @@ var RP = (function () {
     function redraw() {
         const ts = chart.timeScale(), rg = ts.getVisibleLogicalRange();
         validatePriceScaleForData();
-        series.setData(data);
+        setBars(data);
         syncFut();
         window.IND && IND.full();
         if (rg) ts.setVisibleLogicalRange(rg);
@@ -150,7 +150,7 @@ var RP = (function () {
         pending = null; rePickFrom = null; mode = 'off';
         ui();
         if (was && data.length) {
-            series.setData(data);
+            setBars(data);
             syncFut();
             const l = data[data.length - 1];
             lastClose = l.close; lastUp = l.close >= l.open;

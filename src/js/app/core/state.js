@@ -11,10 +11,11 @@ let data = [], noMore = false, loadingOld = false, lastClose = null, lastUp = tr
 /* pend: live candle that arrived before history finished loading; curKey: sym|tf of the data on screen;
    ctl: AbortController of in-flight chart requests; cuBusy/cuT: catch-up lock and last run time */
 let pend = null, curKey = '', ctl = null, cuBusy = false, cuT = 0;
-const DEFAULT_CANDLE_COLORS = ['#26a69a', '#ef5350'];
+const DEFAULT_CANDLE_COLORS = ['#089981', '#F23645']; /* current TradingView default up / down colours */
 let savedCandleColors = store.get('cc', DEFAULT_CANDLE_COLORS);
 // Migrate the former built-in default, but preserve any custom colors saved by the user.
-if (Array.isArray(savedCandleColors) && savedCandleColors[0]?.toLowerCase() === '#0f9d7a' && savedCandleColors[1]?.toLowerCase() === '#f7e21f') {
+const isOldDefault = c => Array.isArray(c) && ((c[0]?.toLowerCase() === '#0f9d7a' && c[1]?.toLowerCase() === '#f7e21f') || (c[0]?.toLowerCase() === '#26a69a' && c[1]?.toLowerCase() === '#ef5350'));
+if (isOldDefault(savedCandleColors)) {
   savedCandleColors = DEFAULT_CANDLE_COLORS;
   store.set('cc', savedCandleColors);
 }

@@ -43,7 +43,7 @@ function resetState() {
     stash();
     tok++;
     ctl && ctl.abort();
-    series.setData([]);
+    setBars([]);
     fut.setData([]);
     data = [];
     noMore = false;

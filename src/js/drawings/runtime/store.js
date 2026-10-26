@@ -109,9 +109,10 @@
         this.items = this.items.filter((d2) => !ids.includes(d2.id));
       });
     }
-    clear() {
+    /** remove every drawing, or only those matching `pred` */
+    clear(pred) {
       this.mutate(() => {
-        this.items = [];
+        this.items = pred ? this.items.filter((d2) => !pred(d2)) : [];
       });
     }
     update(id, fn) {
@@ -168,10 +169,11 @@
         if (d2) d2.z = this.items.reduce((m, x) => Math.min(m, x.z), 0) - 1;
       });
     }
-    setAll(prop, v) {
+    /** set a property on every drawing, or only on those matching `pred` */
+    setAll(prop, v, pred) {
       this.mutate(() => {
         this.items.forEach((d2) => {
-          d2[prop] = v;
+          if (!pred || pred(d2)) d2[prop] = v;
         });
       });
     }

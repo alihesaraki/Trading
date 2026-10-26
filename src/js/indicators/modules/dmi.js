@@ -42,8 +42,8 @@ INDREG.register('dmi', (function () {
     }
     return {
         name: 'DMI', osc: true,
-        fields: [{ k: 'len', l: 'DI length', t: 'n', min: 1, max: 200, step: 1 }, { k: 'adx', l: 'ADX smoothing', t: 'n', min: 1, max: 200, step: 1 }, WID, { k: 'showP', l: 'Show +DI', t: 'b' }, { k: 'showM', l: 'Show −DI', t: 'b' }, { k: 'showA', l: 'Show ADX', t: 'b' }, { k: 'cp', l: '+DI color', t: 'c' }, { k: 'cm', l: '−DI color', t: 'c' }, { k: 'ca', l: 'ADX color', t: 'c' }],
-        defaults: { len: 14, adx: 14, w: 1, showP: true, showM: true, showA: true, cp: '#26a69a', cm: '#ef5350', ca: '#2962FF' },
+        fields: [{ k: 'adx', l: 'ADX smoothing', t: 'n', min: 1, max: 200, step: 1 }, { k: 'len', l: 'DI length', t: 'n', min: 1, max: 200, step: 1 }, WID, { k: 'showP', l: '+DI', t: 'b' }, { k: 'showM', l: '−DI', t: 'b' }, { k: 'showA', l: 'ADX', t: 'b' }, { k: 'cp', l: '+DI color', t: 'c' }, { k: 'cm', l: '−DI color', t: 'c' }, { k: 'ca', l: 'ADX color', t: 'c' }],
+        defaults: { len: 14, adx: 14, w: 1, showP: true, showM: true, showA: true, cp: '#2962FF', cm: '#FF6D00', ca: '#F23645' } /* TradingView: +DI blue, -DI orange, ADX red */,
         create: ind => {
             const o = { priceScaleId: ind.sid };
             /* one value badge per line on the right edge (same as RSI) */
@@ -52,7 +52,7 @@ INDREG.register('dmi', (function () {
         },
         calc: (d, p) => dmi(d, p.len, p.adx),
         style: ind => ['cp', 'cm', 'ca'].forEach((k, i) => ind.s[i].applyOptions({ color: colorAlpha(ind.p, k), lineWidth: ind.p.w, visible: !!ind.v && [ind.p.showP, ind.p.showM, ind.p.showA][i] !== false })),
-        label: ind => `DMI ${ind.p.len} ${ind.p.adx}`,
+        label: ind => `DMI ${ind.p.adx} ${ind.p.len}`,
         color: p => p.cp,
         fmt: (ind, g) => [0, 1, 2].map(k => { const v = g(k); return `<span style="color:${[ind.p.cp, ind.p.cm, ind.p.ca][k]}">${v == null ? '' : v.toFixed(2)}</span>`; }).join(' '),
         need: p => (p.len + p.adx) * 4,

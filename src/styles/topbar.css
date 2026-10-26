@@ -51,13 +51,23 @@
 }
 
 #tfs button,
+#btnType,
 #btnInd {
     flex: none;
 }
 
+#btnType {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    color: var(--tx);
+}
+
+#btnType[aria-expanded="true"] { background: var(--pn-hover); }
+
 #btnInd {
     min-width: max-content;
-    margin-left: auto;
 }
 
 #tfs button.on {

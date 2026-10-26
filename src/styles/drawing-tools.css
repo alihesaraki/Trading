@@ -196,6 +196,53 @@
     flex-direction: column;
     width: 360px;
     max-height: calc(100% - 90px);
+    color-scheme: dark;
+}
+
+/* close (X): same muted, flat look as the Settings window; no bright default button background */
+.dr-x {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--mu);
+    font-size: 14px;
+    line-height: 1;
+}
+
+.dr-x:hover {
+    background: var(--pn-hover);
+    color: var(--tx);
+}
+
+/* Style / Coordinates tabs */
+.dr-tabs {
+    display: flex;
+    gap: var(--sp-1);
+    padding: 0 var(--sp-3);
+    border-bottom: 1px solid var(--bd);
+}
+
+.dr-tabs button {
+    margin-bottom: -1px;
+    padding: 8px 10px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--mu);
+}
+
+.dr-tabs button:hover {
+    color: var(--tx);
+}
+
+.dr-tabs button.on {
+    border-bottom-color: var(--acc);
+    color: var(--tx);
 }
 
 .dr-sh,
@@ -292,8 +339,7 @@
 
 /* coordinates table */
 .dr-pts {
-    padding-bottom: var(--sp-2);
-    border-bottom: 1px solid var(--bd);
+    padding-bottom: var(--sp-1);
 }
 
 .dr-pt-h {
@@ -379,8 +425,164 @@
         max-width: calc(100% - 140px);
     }
 
+    #btnType {
+        margin-left: 0;
+    }
+
     #btnInd {
         margin-left: 0;
     }
 }
 
+
+/* ---- Tool settings window: clean, evenly spaced layout ------------------- */
+.dr-set {
+    width: 348px;
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.dr-sh {
+    padding: 12px 8px 12px var(--sp-4);
+    border-bottom: 0;
+    font-size: 15px;
+}
+
+.dr-sh b {
+    font-weight: 600;
+}
+
+.dr-tabs {
+    padding: 0 var(--sp-4);
+    gap: var(--sp-4);
+}
+
+.dr-tabs button {
+    padding: 8px 2px;
+    font-weight: 500;
+}
+
+.dr-sb {
+    gap: 10px;
+    padding: var(--sp-4);
+}
+
+.dr-row {
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 8px var(--sp-3);
+    min-height: 30px;
+}
+
+.dr-row > span {
+    font-size: 12.5px;
+}
+
+.dr-row input[type=number],
+.dr-row input[type=text],
+.dr-row input[type=datetime-local],
+.dr-row select {
+    height: 30px;
+    padding: 0 8px;
+    font-size: 12.5px;
+}
+
+.dr-row textarea {
+    padding: 6px 8px;
+}
+
+.dr-row > input[type=checkbox] {
+    justify-self: start;
+    margin: 0;
+}
+
+.dr-color-control {
+    width: 100%;
+}
+
+.dr-color-control .icolor-toggle {
+    align-self: stretch;
+    height: 30px;
+    margin: 0;
+    padding: 0 8px;
+    background: var(--bg);
+    font-size: 12.5px;
+}
+
+.dr-row:has(.dr-color-control) > span {
+    padding-top: 6px;
+}
+
+.dr-color-panel .ipal {
+    width: 100%;
+}
+
+/* levels list (Fibonacci etc.): checkbox | value | colour */
+.dr-lv {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dr-lr {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 42px;
+    align-items: center;
+    gap: var(--sp-2);
+    margin: 0;
+}
+
+/* coordinates tab */
+.dr-pts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0;
+}
+
+.dr-cr {
+    grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: var(--sp-2);
+    margin: 0;
+}
+
+.dr-cr input {
+    height: 30px;
+    padding: 0 8px;
+}
+
+.dr-cr-h > span {
+    font-size: 10.5px;
+}
+
+/* footer */
+.dr-sf {
+    align-items: center;
+    padding: 10px var(--sp-4);
+}
+
+.dr-sf button {
+    height: 30px;
+    padding: 0 var(--sp-3);
+    font-size: 12.5px;
+}
+
+.dr-sf button[data-a=def] {
+    border-color: transparent;
+    background: transparent;
+    color: var(--mu);
+}
+
+.dr-sf button[data-a=def]:hover {
+    background: var(--pn-hover);
+    color: var(--tx);
+}
+
+.dr-sf .pri {
+    padding: 0 var(--sp-4);
+    font-weight: 600;
+}
+
+/* price-only coordinates (line tools) */
+.dr-pts.no-time .dr-cr {
+    grid-template-columns: 40px minmax(0, 1fr);
+}

@@ -21,6 +21,9 @@
       this.swallow = false;
       this.raf = 0;
       this.lastPointer = null;
+      this.hold = null; /* Ctrl-held temporary Brush: { tool, mode } to restore on release */
+      this.holdPending = false;
+      this.draftDirty = false;
       this.lastDrawingTap = null;
       this.qm = null;
       this.qmDirty = false;
@@ -141,7 +144,7 @@
           const prev = d2.points[g.idx > 0 ? g.idx - 1 : 0];
           const from = this.ctx().px(prev) ?? void 0;
           const pp = g.off ? { x: p.x + g.off.x, y: p.y + g.off.y } : p;
-          let a = this.anchorAt(pp, e, d2.points.length > 1 && !t.dragHandle ? from : void 0);
+          let a = this.anchorAt(pp, e, d2.points.length > 1 && !t.dragHandle ? from : void 0, d2.points.length > 1 && !t.dragHandle ? prev : void 0);
           if (!a) return;
           if (t.dragHandle) {
             t.dragHandle(d2, g.idx, a, this.m);
@@ -173,6 +176,10 @@
         else if (g?.k === "qm") this.qmUp(this.local(e), e);
         else if (g?.k === "erase") {
           this.store.end();
+        }
+        if (this.holdPending) {
+          this.holdPending = false;
+          this.endHoldBrush();
         }
       };
       this.onDbl = (e) => {
@@ -207,13 +214,13 @@
         if (!this.selection.has(d2.id)) this.select([d2.id]);
         this.hooks.menu?.(e.clientX, e.clientY, this.menuItems(d2));
       };
-      /* Arrow keys nudge the selected Long / Short position: left/right = one bar, up/down = a few pixels of price. */
+      /* Arrow keys nudge the selected drawings: left/right = one bar, up/down = a few pixels of price. */
       this.onArrow = (e) => {
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
         if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || this.tool || this.draft || this.gesture) return;
         const t = e.target;
         if (t && (t.isContentEditable || t.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]'))) return;
-        const pos = this.selected().filter((d2) => (d2.type === "long" || d2.type === "short") && !d2.locked && !d2.hidden);
+        const pos = this.selected().filter((d2) => !d2.locked && !d2.hidden);
         if (!pos.length) return;
         e.preventDefault();
         e.stopPropagation();
@@ -235,6 +242,10 @@
         this.store.touch();
         clearTimeout(this.arrowT);
         this.arrowT = setTimeout(() => this.store.end(), 500);
+      };
+      /* Pressing / releasing Shift while a line is being drawn re-evaluates the straight-line snap without a mouse move. */
+      this.onShift = (e) => {
+        if (e.key === "Shift" && this.draft && !this.draft.free && this.lastPointer) this.updatePreview(this.lastPointer, { shiftKey: e.type === "keydown" });
       };
       this.onKey = (e) => {
         const t = e.target;
@@ -267,7 +278,7 @@
           this.duplicateSelection();
           return;
         }
-        if (mod && k === "a" && !this.tool) {
+        if (mod && k === "a" && (!this.tool || this.hold)) {
           e.preventDefault();
           this.select(this.store.items.filter((d2) => !d2.hidden).map((d2) => d2.id));
           return;
@@ -336,6 +347,17 @@
           this.setTool(t2.type);
         }
       };
+      /* Hold Ctrl = temporary Brush (left button draws); releasing Ctrl restores the previous tool / mode. */
+      this.onCtrlDown = (e) => {
+        if (e.key !== "Control" || e.repeat) return;
+        const t = e.target;
+        if (t && (t.isContentEditable || t.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]'))) return;
+        this.beginHoldBrush();
+      };
+      this.onCtrlUp = (e) => {
+        if (e.key === "Control") this.endHoldBrush();
+      };
+      this.onBlur = () => this.endHoldBrush();
       const NS = "http://www.w3.org/2000/svg";
       this.svg = document.createElementNS(NS, "svg");
       this.svg.setAttribute("class", "dr-svg");
@@ -358,6 +380,11 @@
       h.addEventListener("contextmenu", this.onCtx, true);
       document.addEventListener("keydown", this.onKey);
       document.addEventListener("keydown", this.onArrow, true);
+      document.addEventListener("keydown", this.onShift);
+      document.addEventListener("keyup", this.onShift);
+      document.addEventListener("keydown", this.onCtrlDown);
+      document.addEventListener("keyup", this.onCtrlUp);
+      window.addEventListener("blur", this.onBlur);
       const loop = () => {
         this.raf = requestAnimationFrame(loop);
         this.frame();
@@ -368,6 +395,11 @@
       cancelAnimationFrame(this.raf);
       document.removeEventListener("keydown", this.onKey);
       document.removeEventListener("keydown", this.onArrow, true);
+      document.removeEventListener("keydown", this.onShift);
+      document.removeEventListener("keyup", this.onShift);
+      document.removeEventListener("keydown", this.onCtrlDown);
+      document.removeEventListener("keyup", this.onCtrlUp);
+      window.removeEventListener("blur", this.onBlur);
       this.host.removeEventListener("pointerdown", this.onDown, true);
       this.host.removeEventListener("pointermove", this.onHover, true);
       this.host.removeEventListener("pointerleave", this.onLeave, true);
@@ -401,7 +433,33 @@
       this.hooks.changed?.();
       return true;
     }
+    beginHoldBrush() {
+      if (this.hold || this.draft || this.gesture || this.qm || !TOOL_MAP.brush) return;
+      this.hold = { tool: this.tool, mode: this.mode };
+      this.tool = "brush";
+      this.mode = "cursor";
+      this.dirty = true;
+      this.updateCursor();
+      this.hooks.changed?.();
+    }
+    endHoldBrush() {
+      if (!this.hold) return;
+      if (this.gesture?.k === "draw") {
+        this.holdPending = true;
+        return;
+      }
+      const h = this.hold;
+      this.hold = null;
+      this.holdPending = false;
+      if (this.draft) this.cancelDraft();
+      this.tool = h.tool;
+      this.mode = h.mode;
+      this.dirty = true;
+      this.updateCursor();
+      this.hooks.changed?.();
+    }
     setTool(t) {
+      this.hold = null;
       this.clearQM();
       if (this.draft) this.cancelDraft();
       this.tool = t;
@@ -414,6 +472,7 @@
       this.hooks.changed?.();
     }
     setMode(m) {
+      this.hold = null;
       this.clearQM();
       this.cancelDraft();
       this.tool = null;
@@ -447,7 +506,7 @@
           const x = m.timeToX(a.time), y = m.priceToY(a.price);
           return x == null || y == null ? null : { x, y };
         },
-        price: (p) => p.toFixed(dec)
+        price: (p) => fmtPrice(p, dec)
       };
     }
     primsOf(d2, c = this.ctx()) {
@@ -496,13 +555,21 @@
       const r = this.m.plot();
       return p.x >= 0 && p.y >= 0 && p.x <= r.w && p.y <= r.h;
     }
-    anchorAt(p, e, from) {
-      let q = p;
+    /* `from` = pixel of the previous point, `fromA` = its exact anchor. Shift snaps the segment to the nearest 45 degrees;
+       horizontal / vertical results copy the price / time of `fromA` so the line is exactly level / plumb. */
+    anchorAt(p, e, from, fromA) {
+      let q = p, snap = 0;
       if (e.shiftKey && from) {
-        const dx = p.x - from.x, dy = p.y - from.y, r = Math.hypot(dx, dy), a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+        const dx = p.x - from.x, dy = p.y - from.y, r = Math.hypot(dx, dy), k = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)), a = k * (Math.PI / 4);
         q = { x: from.x + r * Math.cos(a), y: from.y + r * Math.sin(a) };
+        snap = k % 4 === 0 ? 1 : Math.abs(k) % 4 === 2 ? 2 : 0;
       }
-      return pointToAnchor(this.m, q.x, q.y);
+      const an = pointToAnchor(this.m, q.x, q.y);
+      if (an && fromA) {
+        if (snap === 1) an.price = fromA.price;
+        else if (snap === 2) an.time = fromA.time;
+      }
+      return an;
     }
     /* ---------- event handlers ---------- */
     ignoreTarget(e) {
@@ -565,12 +632,12 @@
     /* --- drawing --- */
     drawDown(p, e) {
       const def = TOOL_MAP[this.tool];
-      const a = this.anchorAt(p, e, this.draft ? this.ctx().px(this.draft.d.points[this.draft.d.points.length - 1]) ?? void 0 : void 0);
+      const a = this.anchorAt(p, e, this.draft ? this.ctx().px(this.draft.d.points[this.draft.d.points.length - 1]) ?? void 0 : void 0, this.draft ? this.draft.d.points[this.draft.d.points.length - 1] : void 0);
       this.gesture = { k: "draw" };
       if (!a) return;
       if (!this.draft) {
         const d2 = makeDrawing(def.type, [a], this.store.toolDefaults(def.type));
-        this.draft = { d: d2, preview: a, down: p, moved: false, free: def.points === "free" };
+        this.draft = { d: d2, preview: a, down: p, moved: false, free: def.points === "free", px: def.points === "free" ? [{ x: p.x, y: p.y }] : null };
         if (def.points === 1) {
           this.finishDraft();
           return;
@@ -589,10 +656,10 @@
     updatePreview(p, e) {
       if (!this.draft) return;
       const pts2 = this.draft.d.points, last = this.ctx().px(pts2[pts2.length - 1]) ?? void 0;
-      const a = this.anchorAt(p, e, last);
+      const a = this.anchorAt(p, e, last, pts2[pts2.length - 1]);
       if (a) {
         this.draft.preview = a;
-        this.dirty = true;
+        this.draftDirty = true;
       }
     }
     drawMove(p, e) {
@@ -600,12 +667,15 @@
       if (!dr) return;
       if (Math.hypot(p.x - dr.down.x, p.y - dr.down.y) > 4) dr.moved = true;
       if (dr.free) {
-        const last = this.ctx().px(dr.d.points[dr.d.points.length - 1]);
+        /* pixel-space stroke: cheap distance test, no per-move chart lookups; anchors are stored for the final drawing */
+        const px = dr.px || (dr.px = []), last = px[px.length - 1];
         if (!last || Math.hypot(p.x - last.x, p.y - last.y) >= 2) {
+          if (px.length >= 6000) return;
           const a = pointToAnchor(this.m, p.x, p.y);
           if (a) {
+            px.push({ x: p.x, y: p.y });
             dr.d.points.push(a);
-            this.dirty = true;
+            this.draftDirty = true;
           }
         }
       } else this.updatePreview(p, e);
@@ -657,7 +727,7 @@
       def.init?.(d2, this.m);
       this.store.add(d2);
       this.gesture = null;
-      if (!this.stay) {
+      if (!this.stay && !this.hold) {
         this.tool = null;
         this.updateCursor();
       }
@@ -809,8 +879,13 @@
         this.sig = s;
         this.lastRev = this.store.rev;
         this.dirty = false;
+        this.draftDirty = false;
         this.render();
         this.qmDirty = !!this.qm || this.qmDirty;
+      } else if (this.draftDirty) {
+        /* a stroke / preview changed: repaint only the draft layer, not every drawing */
+        this.draftDirty = false;
+        this.renderDraft(this.ctx());
       }
       if (this.qmDirty) {
         this.qmDirty = false;
@@ -828,14 +903,7 @@
         parts.push(`<g data-id="${d2.id}"${d2.locked ? ' class="dr-locked"' : ""}>${prims.map(primToSvg).join("")}</g>`);
       }
       this.layer.innerHTML = parts.join("");
-      if (this.draft) {
-        const t = TOOL_MAP[this.draft.d.type], need = typeof t.points === "number" ? t.points : this.draft.d.points.length + 1;
-        const pts2 = [...this.draft.d.points];
-        if (!this.draft.free) while (pts2.length < need) pts2.push(this.draft.preview);
-        if (t.points === "multi") pts2.push(this.draft.preview);
-        const tmp = { ...this.draft.d, points: pts2, draft: true };
-        this.draftLayer.innerHTML = `<g opacity="0.9">${this.primsOf(tmp, c).map(primToSvg).join("")}</g>`;
-      } else this.draftLayer.innerHTML = "";
+      this.renderDraft(c);
       const hp = [];
       for (const d2 of this.selected()) {
         if (d2.hidden) continue;
@@ -843,6 +911,25 @@
       }
       this.handlesLayer.innerHTML = hp.join("");
       this.hooks.changed?.();
+    }
+    renderDraft(c) {
+      if (!this.draft) {
+        if (this.draftLayer.firstChild) this.draftLayer.innerHTML = "";
+        return;
+      }
+      const dr = this.draft, t = TOOL_MAP[dr.d.type];
+      if (dr.free && dr.px) {
+        /* live stroke straight from pixels */
+        const prim = { k: "poly", pts: dr.px, ...strokeOf(dr.d.style) };
+        this.draftLayer.innerHTML = `<g opacity="0.9">${primToSvg(prim)}</g>`;
+        return;
+      }
+      const need = typeof t.points === "number" ? t.points : dr.d.points.length + 1;
+      const pts2 = [...dr.d.points];
+      if (!dr.free) while (pts2.length < need) pts2.push(dr.preview);
+      if (t.points === "multi") pts2.push(dr.preview);
+      const tmp = { ...dr.d, points: pts2, draft: true };
+      this.draftLayer.innerHTML = `<g opacity="0.9">${this.primsOf(tmp, c).map(primToSvg).join("")}</g>`;
     }
     /** bounding box (svg-local px) of the current selection's handles, for the floating toolbar */
     selectionBox() {

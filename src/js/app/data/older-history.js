@@ -16,7 +16,7 @@ async function loadOlder() {
         const add = k.map(candle), rg = chart.timeScale().getVisibleLogicalRange();
         data = add.concat(data);
         validatePriceScaleForData();
-        series.setData(data);
+        setBars(data);
         window.IND && IND.full();
         if (rg)
             chart.timeScale().setVisibleLogicalRange({ from: rg.from + add.length, to: rg.to + add.length }); /* keep the view where it was */

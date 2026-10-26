@@ -165,6 +165,12 @@
     }
     #btnTf[aria-expanded="true"] { background: var(--pn-hover); }
     #btnTf svg { opacity: .7; }
+    #bar #btnType {
+        min-width: 44px;
+        margin-left: 0;
+        padding: 0;
+    }
+    #bar #btnType .ct-ico { width: 24px; height: 24px; }
     #bar #btnInd {
         min-width: 44px;
         margin-left: 0;
@@ -282,7 +288,7 @@
     #imenu button { min-height: 44px; padding: 10px 14px; border-radius: 8px; font-size: 15px; }
     #iset { gap: 10px; max-height: min(78vh, 640px);
  max-height: min(78dvh, 640px); padding: 14px 16px calc(14px + var(--safe-bottom)); }
-    #iset > label { grid-template-columns: minmax(0, 1fr) 132px; gap: 10px; font-size: 14px; }
+    #iset .ipane > label { grid-template-columns: minmax(0, 1fr) 132px; gap: 10px; font-size: 14px; }
     body #iset input[type=number], body #iset select { width: 132px; max-width: 132px; min-height: 40px; font-size: 16px; }
     #iset > label > input, #iset > label > select { max-width: 132px; }
     .ih { cursor: default; font-size: 16px; }
@@ -290,6 +296,9 @@
     .dr-set { max-height: min(84vh, 680px) !important;
  max-height: min(84dvh, 680px) !important; }
     .dr-sh { padding: 14px 16px; }
+    .dr-tabs { padding: 0 16px; }
+    .dr-tabs button { min-height: 42px; }
+    .dr-x { width: 36px; height: 36px; }
     .dr-sb { padding: 10px 16px; }
     .dr-sf { padding: 12px 16px; }
     .dr-sf button { min-height: 42px; padding: 0 16px; }
@@ -298,9 +307,10 @@
     .dr-cr input, .ihex, #rpDate input, .sni { min-height: 40px; font-size: 16px; }
 
     /* Centered dialogs */
-    #pop, #bgset {
+    .st-head { cursor: default; }
+    #pop {
         z-index: 90;
-        width: min(340px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+        width: min(400px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
         min-width: 0;
         border-radius: 16px;
         box-shadow: var(--shadow), 0 0 0 100vmax rgba(0, 0, 0, .55);
@@ -392,7 +402,7 @@
     .row, #cols { gap: 6px; }
     .row .c { padding: 3px 5px; font-size: 12px; }
     .dr-row { grid-template-columns: 92px minmax(0, 1fr); }
-    #iset > label { grid-template-columns: minmax(0, 1fr) 112px; }
+    #iset .ipane > label { grid-template-columns: minmax(0, 1fr) 112px; }
     body #iset input[type=number], body #iset select { width: 112px; max-width: 112px; }
 }
 

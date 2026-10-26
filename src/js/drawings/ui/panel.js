@@ -30,6 +30,9 @@
     for (let k = 0; k < 2; k++) { const o = wallParts(t); t += asUtc - Date.UTC(+o.year, +o.month - 1, +o.day, +o.hour, +o.minute, +o.second) / 1e3; }
     return t;
   };
+  /* last selected tab of the drawing settings window ("style" | "coords") */
+  var drTab = "style";
+  var inGroup = (g) => (d2) => TOOL_MAP[d2.type]?.group === g;
   var DrawingUI = class {
     constructor(host, c, store) {
       this.host = host;
@@ -107,26 +110,24 @@
         }),
         this.btn("hideall", "eye", "Hide / show\u2026", () => {
           const b = this.btns.get("hideall").getBoundingClientRect(), st = this.hideState();
-          const dHide = st.d !== true, iHide = st.i !== true;
-          const allHide = st.d === false || st.i === false || (st.d === null && st.i === null);
+          const lHide = st.l !== true, tHide = st.t !== true, iHide = st.i !== true;
           this.menu(b.right + 4, b.top, [
-            [allHide ? "Hide all" : "Show all", () => {
-              this.setDrawingsHidden(allHide);
-              this.setIndicatorsHidden(allHide);
-            }],
-            [dHide ? "Hide drawings" : "Show drawings", () => this.setDrawingsHidden(dHide)],
+            [lHide ? "Hide lines" : "Show lines", () => this.setGroupHidden("lines", lHide)],
+            [tHide ? "Hide tools" : "Show tools", () => this.setGroupHidden("other", tHide)],
             [iHide ? "Hide indicators" : "Show indicators", () => this.setIndicatorsHidden(iHide)]
           ]);
         }),
         this.btn("clear", "trash", "Delete\u2026", () => {
           const b = this.btns.get("clear").getBoundingClientRect();
+          const drop = (pred) => () => {
+            store(this).clear(pred);
+            c.selection.clear();
+            c.hooks.changed?.();
+          };
           this.menu(b.right + 4, b.top, [
-            ["Delete All Drawings", () => {
-              store(this).clear();
-              c.selection.clear();
-              c.hooks.changed?.();
-            }],
-            ["Delete All Indicators", () => {
+            ["Delete Lines", drop(inGroup("lines"))],
+            ["Delete Tools", drop(inGroup("other"))],
+            ["Delete Indicators", () => {
               window.IND?.removeAll?.();
             }]
           ]);
@@ -143,10 +144,17 @@
         return u.store;
       }
     }
-    /* Hidden state per category: true = everything hidden, false = something visible, null = nothing to hide. */
+    /* Hidden state per category: true = everything hidden, false = something visible, null = nothing to hide.
+       l = lines, t = tools, d = all drawings (lines + tools), i = indicators. */
     hideState() {
       const items = this.store.items, ind = window.IND;
+      const of = (g) => {
+        const xs = items.filter(inGroup(g));
+        return xs.length ? xs.every((d2) => d2.hidden) : null;
+      };
       return {
+        l: of("lines"),
+        t: of("other"),
         d: items.length ? items.every((d2) => d2.hidden) : null,
         i: ind && ind.count && ind.count() ? ind.allHidden() : null
       };
@@ -154,6 +162,12 @@
     setDrawingsHidden(v) {
       this.store.setAll("hidden", v);
       if (v) this.c.selection.clear();
+      this.refresh();
+    }
+    /* Hide / show only the drawings of one toolbar tab ("lines" or "other" = Tools), independent of the other tab. */
+    setGroupHidden(g, v) {
+      this.store.setAll("hidden", v, inGroup(g));
+      if (v) for (const id of [...this.c.selection]) if (this.store.get(id)?.hidden) this.c.selection.delete(id);
       this.refresh();
     }
     setIndicatorsHidden(v) {
@@ -186,7 +200,7 @@
     /* ---------- refresh (toolbar state, floating bar, hint) ---------- */
     refresh() {
       const c = this.c, cur = c.tool ? TOOL_MAP[c.tool] : null;
-      if (cur) this.lastTool[cur.group] = cur.type;
+      if (cur && !c.hold) this.lastTool[cur.group] = cur.type;
       const on = (id, v) => this.btns.get(id)?.classList.toggle("on", v);
       on("cursor", !c.tool && c.mode === "cursor");
       for (const g of GROUPS) {
@@ -201,7 +215,7 @@
       const items = this.store.items;
       this.btns.get("lockall").innerHTML = icon(items.length && items.every((d2) => d2.locked) ? "lock" : "unlock");
       on("lockall", !!items.length && items.every((d2) => d2.locked));
-      const hs = this.hideState(), hAny = hs.d === true || hs.i === true, hAll = hAny && hs.d !== false && hs.i !== false;
+      const hs = this.hideState(), hAny = hs.d === true || hs.i === true || hs.l === true || hs.t === true, hAll = hAny && hs.d !== false && hs.i !== false;
       this.btns.get("hideall").innerHTML = icon(hAll ? "eyeoff" : "eye");
       on("hideall", hAny);
       this.btns.get("undo").disabled = !this.store.canUndo();
@@ -338,9 +352,9 @@
       const def = TOOL_MAP[d2.type], p = el("div", "dr-set");
       this.settings = p;
       this.settingsId = d2.id;
-      p.innerHTML = `<div class="dr-sh"><b>${esc2(def.label)}</b><button class="dr-x" data-dr-ui>\u2715</button></div><div class="dr-sb"></div>
+      p.innerHTML = `<div class="dr-sh"><b>${esc2(def.label)}</b><button class="dr-x" type="button" title="Close" aria-label="Close" data-dr-ui>\u2715</button></div><div class="dr-tabs" role="tablist" data-dr-ui></div><div class="dr-sb dr-sb-style"></div><div class="dr-sb dr-sb-coords" hidden></div>
       <div class="dr-sf"><button data-a="def" data-dr-ui>Save as default</button><button data-a="ok" class="pri" data-dr-ui>Done</button></div>`;
-      const body = p.querySelector(".dr-sb");
+      const body = p.querySelector(".dr-sb-style"), cbody = p.querySelector(".dr-sb-coords"), tabs = p.querySelector(".dr-tabs");
       this.store.begin();
       const rows = [];
       const live = () => {
@@ -353,10 +367,12 @@
         rows.push(r);
         body.appendChild(r);
       }
-      /* ---- coordinates: one aligned row per anchor point (price + date/time in the chart's time zone) ---- */
-      if (!def.hideCoords && d2.points.length) {
-        const pts2 = el("div", "dr-pts"), n = d2.points.length;
-        pts2.innerHTML = `<div class="dr-pt-h"><b>Coordinates</b></div><div class="dr-cr dr-cr-h"><span></span><span>Price</span><span>Date &amp; time (${esc2(TZNAME)})</span></div>`;
+      /* ---- Coordinates tab: one aligned row per anchor point (price + date/time in the chart's time zone) ---- */
+      const hasCoords = !def.hideCoords && d2.points.length, showTime = def.group !== "lines";
+      if (hasCoords) {
+        const pts2 = el("div", "dr-pts"), n = d2.points.length, dec = this.c.m.decimals();
+        pts2.innerHTML = `<div class="dr-cr dr-cr-h"><span></span><span>Price</span>${showTime ? "<span>Time</span>" : ""}</div>`;
+        if (!showTime) pts2.classList.add("no-time");
         const names = n === 2 ? ["Start", "End"] : n === 3 ? ["A", "B", "C"] : null;
         d2.points.forEach((a, i) => {
           const row = el("div", "dr-cr");
@@ -364,7 +380,7 @@
           const pr = el("input");
           pr.type = "number";
           pr.step = "any";
-          pr.value = String(a.price);
+          pr.value = fmtPrice(a.price, dec);
           pr.title = "Price";
           pr.onchange = () => {
             if (Number.isFinite(+pr.value) && pr.value !== "") {
@@ -372,28 +388,54 @@
               live();
             }
           };
-          const tm = el("input");
-          tm.type = "datetime-local";
-          tm.step = "1";
-          tm.title = "Time (" + TZNAME + ")";
-          tm.value = toWall(a.time);
-          tm.onchange = () => {
-            const t = fromWall(tm.value);
-            if (Number.isFinite(t)) {
-              d2.points[i].time = t;
-              live();
-            }
-          };
+          const tm = showTime ? el("input") : null;
+          if (tm) tm.type = "datetime-local";
+          if (tm) {
+            tm.step = "1";
+            tm.title = "Time (" + TZNAME + ")";
+            tm.value = toWall(a.time);
+            tm.onchange = () => {
+              const t = fromWall(tm.value);
+              if (Number.isFinite(t)) {
+                d2.points[i].time = t;
+                live();
+              }
+            };
+          }
           row.sync = () => {
-            if (document.activeElement !== pr) pr.value = String(d2.points[i].price);
-            if (document.activeElement !== tm) tm.value = toWall(d2.points[i].time);
+            if (document.activeElement !== pr) pr.value = fmtPrice(d2.points[i].price, dec);
+            if (tm && document.activeElement !== tm) tm.value = toWall(d2.points[i].time);
           };
           rows.push(row);
-          row.append(pr, tm);
+          tm ? row.append(pr, tm) : row.append(pr);
           pts2.appendChild(row);
         });
-        body.prepend(pts2);
+        cbody.appendChild(pts2);
       }
+      /* ---- tabs (Style / Coordinates), TradingView-style; a single pane needs no tab bar ---- */
+      const hasStyle = body.children.length > 0;
+      const showTab = (id) => {
+        if (!hasCoords || !hasStyle) id = hasCoords ? "coords" : "style";
+        drTab = id;
+        body.hidden = id !== "style";
+        cbody.hidden = id !== "coords";
+        tabs.querySelectorAll("button").forEach((x) => {
+          const on = x.dataset.tab === id;
+          x.classList.toggle("on", on);
+          x.setAttribute("aria-selected", String(on));
+        });
+      };
+      if (hasCoords && hasStyle) {
+        for (const [id, label] of [["style", "Style"], ["coords", "Coordinates"]]) {
+          const tb = el("button", "", label);
+          tb.type = "button";
+          tb.dataset.tab = id;
+          tb.setAttribute("role", "tab");
+          tb.onclick = () => showTab(id);
+          tabs.appendChild(tb);
+        }
+      } else tabs.hidden = true;
+      showTab(drTab);
       /* Draggable: grab the title bar (same behaviour as the indicator settings panel). */
       const head = p.querySelector(".dr-sh");
       head.setAttribute("data-dr-ui", "");
