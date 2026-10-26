@@ -15,7 +15,7 @@ A Trading-style market chart UI for **Binance USDT-M Futures**, written in plain
 - Indicators: SMA, EMA, SMMA, RSI (TradingView-accurate), DMI/ADX, HalfTrend, Volume.
 - Drawing tools: lines, Fibonacci, shapes/brush, annotations, long/short position, measure, fixed-range volume profile; undo/redo; stored per symbol.
 - Chart type menu (button next to *Indicators*): Bars, Candles, Hollow candles, Line, Line with markers, Step line, Area, HLC area, Baseline, Columns, High-low, Heikin Ashi (`src/js/app/chart/chart-type.js`; every candle write goes through `setBars()` / `updateBar()`).
-- One TradingView-style **Settings** window (double-click the chart or right-click → *Settings…*) with a *Symbol* tab (candle body / borders / wick colours) and a *Canvas* tab (background, grid lines, crosshair).
+- One TradingView-style **Settings** window (double-click the chart or right-click → *Settings…*) with a *Symbol* tab (candle body / borders / wick colours, plus the *Status line* toggles: Symbol name, Chart value, Bar change) and a *Canvas* tab (background, grid lines, crosshair).
 - Indicator settings use TradingView's *Inputs* / *Style* tabs; MA family has Offset + Smoothing, Volume has Volume MA + previous-close colouring.
 - Bar Replay (TradingView style), linear/log price scale, context menu, keyboard shortcuts.
 - Mobile layout: bottom tab bar (Watchlist / Chart / Draw), landscape rail, safe-area handling.
@@ -124,7 +124,7 @@ Order below is exactly the manifest order (top to bottom = execution order).
 | 16 | `ui/context-menu.js` | Context menu shared by chart and watchlist. |
 | 17 | `chart/price-scale.js` | Linear/log scale controller (native LWC modes), Alt+L shortcut. |
 | 18 | `ui/toolbar.js` | Timeframe bar and phone timeframe picker. |
-| 19 | `chart/header.js` | Title + daily change of the selected coin. |
+| 19 | `chart/header.js` | TradingView-style header (top-left): symbol name, chart value (OHLC of the candle under the crosshair, latest candle otherwise) and bar change. Toggles live in Settings → Symbol → Status line (`hdr` in localStorage; defaults: name on, value on, bar change off). |
 | 20 | `ui/replay.js` | Bar Replay (largest UI file). |
 | 21 | `watchlist/core.js` | Price formatting, flag cycle (none → green → red). |
 | 22 | `data/daily-open.js` | Daily-open prices (Chg% since 00:00 UTC). |
@@ -176,7 +176,7 @@ Order (cascade matters): `tokens` → `base` → `topbar` → `chart-overlays` �
 - **`window.TVDR`** (created in `src/js/app/chart/chart.js`) is the bridge to the drawing layer: `{ chart, series, bars(), sym(), dec(), store }`. `drawings.js` is an IIFE, so it only sees `window` properties: `TVDR`, `LightweightCharts`, `IND` (e.g. `IND.removeAll`, `IND.setVisible`) and the DOM elements `#cw` and `#chart`. `drawings/index.js` only starts when `TVDR` and `LightweightCharts` exist and then sets `window.DR`.
 - **Early fetch.** `index.html` starts `P_T` (24h tickers) and `P_K` (klines for `SYM0`/`TF0`, default `BTCUSDT`/`1d`) before the chart library loads; `data/history.js` reuses `P_K` for the first load. Keep `SYM0`/`TF0` consistent with that logic.
 - **DOM ids.** Much of the code finds elements by id from `index.html` (`#chart`, `#cw`, `#tfs`, `#btnInd`, `#btnReplay`, `#btnWatch`, `#list`, `#side`, `#mnav`, `#pop`, `#imenu`, …). Renaming an id requires updating JS, CSS and tests together.
-- **Persistence** (browser `localStorage`, through the `store` wrapper that never throws): selected symbol/timeframe (`chartSelectedSymbol`, `chartSelectedTimeframe`), price scale mode (`tview-price-scale-mode`), watchlist flags/sections/order/column widths/visibility (`flags`, `secs`, `secOf`, `ord`, `cw2`, `sw2`, `watchlistHidden`, …), candle/background colours (`cc`, `cco`, `bg`), indicator configuration (`inds`, …), replay speed (`rpSpeed`), daily-open and market-cap caches (`dopen`, `mcap`), and drawings under `dr:v1:<SYMBOL>`. Changing a stored shape needs migration code.
+- **Persistence** (browser `localStorage`, through the `store` wrapper that never throws): selected symbol/timeframe (`chartSelectedSymbol`, `chartSelectedTimeframe`), price scale mode (`tview-price-scale-mode`), watchlist flags/sections/order/column widths/visibility (`flags`, `secs`, `secOf`, `ord`, `cw2`, `sw2`, `watchlistHidden`, …), candle/background colours (`cc`, `cco`, `bg`, header toggles `hdr`), indicator configuration (`inds`, …), replay speed (`rpSpeed`), daily-open and market-cap caches (`dopen`, `mcap`), and drawings under `dr:v1:<SYMBOL>`. Changing a stored shape needs migration code.
 
 ---
 
