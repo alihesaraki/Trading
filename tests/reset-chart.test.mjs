@@ -30,6 +30,7 @@ function harness({ count = 300, noMore = false, getJImpl = async () => [] } = {}
     candle: row => ({ time: row[0] / 1000, open: +row[1], high: +row[2], low: +row[3], close: +row[4] }),
     validatePriceScaleForData() {},
     series: { setData: d => { context.seriesData = d; } },
+    setBars: d => { context.seriesData = d; },
     window: { IND: null },
     requestAnimationFrame() {},
     Math, Number, String, encodeURIComponent,

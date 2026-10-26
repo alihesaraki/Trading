@@ -26,7 +26,7 @@ test('mobile timeframe controls use a shrinkable horizontal scroller and touch-s
 
 test('mobile dropdowns and settings panels are bounded and scroll internally', () => {
   assert.match(css, /#imenu\s*\{[\s\S]*?max-height:[\s\S]*?overflow-y:\s*auto;/);
-  assert.match(css, /#pop,\s*#bgset\s*\{[\s\S]*?max-height:[\s\S]*?overflow:\s*auto;/);
+  assert.match(css, /#pop\s*\{[\s\S]*?max-height:[\s\S]*?overflow:\s*auto;/);
   assert.match(indicatorEngine, /main\.clientWidth - width - 8 - safeRight/);
   assert.match(indicatorEngine, /b\.top - m\.top - height - 3/);
 });

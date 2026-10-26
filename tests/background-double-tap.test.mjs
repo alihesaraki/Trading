@@ -16,5 +16,5 @@ test('background double-tap ignores candle taps, chart axes, and overlay control
   assert.match(source, /candleAt\(e\)/);
   assert.match(source, /plotRight = rect\.width - chart\.priceScale\('right'\)\.width\(\)/);
   assert.match(source, /plotBottom = rect\.height - chart\.timeScale\(\)\.height\(\)/);
-  assert.match(source, /#lg,#iset,#pop,#bgset,#tl/);
+  assert.match(source, /#lg,#iset,#pop,#tl/);
 });
