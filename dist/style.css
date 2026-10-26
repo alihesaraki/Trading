@@ -18,6 +18,7 @@
     --acc: #2962ff;
     --acc-bg: rgba(41, 98, 255, .16);
     --up: #089981;
+    --flag-blue: #2962ff;
     --dn: #f23645;
     --r-sm: 4px;
     --r-md: 6px;
@@ -283,39 +284,54 @@ body.resizing-oscillator { cursor: row-resize !important; user-select: none; }
     text-align: center;
 }
 
-/* Symbol title + change */
+/* Chart header (TradingView status line): symbol name + chart value + bar change */
 #tl {
     position: absolute;
     top: var(--sp-2);
     left: calc(var(--dtb) + var(--sp-3));
     z-index: 6;
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: var(--sp-2);
+    column-gap: var(--sp-2);
+    row-gap: 2px;
     max-width: calc(100% - var(--dtb) - 90px);
-    font-size: 12px;
-    line-height: 14px;
-    white-space: nowrap;
-    overflow: hidden;
+    line-height: 18px;
     pointer-events: none;
 }
 
+#tl [hidden] { display: none; }
+
 #ttl {
+    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 500;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-#chg {
-    flex: none;
-    font-size: 12px;
+#hv {
+    min-width: 0;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
+
+.hv-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 6px;
+}
+
+.hv-i { display: inline-flex; gap: 3px; }
 
 /* Indicator legend */
 #lg {
     position: absolute;
-    top: 28px;
+    top: var(--lg-top, 28px);
     left: calc(var(--dtb) + var(--sp-3));
     z-index: 6;
     display: flex;
@@ -585,6 +601,10 @@ body.flip #side {
     color: var(--dn);
 }
 
+#flt .b {
+    color: var(--flag-blue);
+}
+
 /* Column header + rows share one grid so the columns always line up */
 #cols,
 .row {
@@ -741,7 +761,8 @@ body.flip #side {
 }
 
 .fl.g,
-.fl.r {
+.fl.r,
+.fl.b {
     opacity: 1;
 }
 
@@ -751,6 +772,54 @@ body.flip #side {
 
 .fl.r {
     color: var(--dn);
+}
+
+.fl.b {
+    color: var(--flag-blue);
+}
+
+/* Flag color picker popup */
+#flpick {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--bd, #2a2e39);
+    border-radius: 6px;
+    background: var(--bg2, #1e222d);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+}
+
+#flpick .sw {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: none;
+    color: var(--ico);
+    cursor: pointer;
+}
+
+#flpick .sw:hover,
+#flpick .sw.on {
+    background: var(--acc-bg);
+    border-color: var(--acc);
+}
+
+#flpick .sw.g {
+    color: var(--up);
+}
+
+#flpick .sw.r {
+    color: var(--dn);
+}
+
+#flpick .sw.b {
+    color: var(--flag-blue);
 }
 
 /* Section header row */
@@ -2534,9 +2603,9 @@ body.watchlist-hidden #side {
         text-shadow: 0 0 4px var(--chart-bg, #09101c), 0 0 2px var(--chart-bg, #09101c);
     }
     #ttl { max-width: 100%; font-size: 12.5px; }
-    #chg { font-size: 12.5px; font-weight: 600; }
+    #hv { font-size: 11.5px; }
     #lg {
-        top: 46px;
+        top: var(--lg-top, 46px);
         left: 8px;
         gap: 4px;
         max-width: calc(100% - 80px);

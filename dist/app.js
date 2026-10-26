@@ -296,6 +296,7 @@ function baselineMid() {
 function setBars(d) {
     if (chartType === 'ha') { haArr = []; for (let i = 0; i < d.length; i++) haArr.push(haOf(haArr[i - 1], d[i])); } else haArr = [];
     series.setData(d.map((b, i) => candlePoint(b, d[i - 1], i)));
+    if (typeof scheduleHeaderValues === 'function') scheduleHeaderValues();
     if (!chartAlts.length) return;
     if (chartType === 'baseline') chartAlts[0].applyOptions({ baseValue: { type: 'price', price: baselineMid() } });
     const cols = chartAlts.map(() => []);
@@ -311,6 +312,7 @@ function updateBar(b) {
         haArr[i] = haOf(haArr[i - 1], b);
     }
     series.update(candlePoint(b, prev, i));
+    if (typeof scheduleHeaderValues === 'function') scheduleHeaderValues();
     altPoints(b, prev).forEach((pt, k) => chartAlts[k] && chartAlts[k].update(pt));
 }
 /* rebuild after a colour / type change */
@@ -472,6 +474,7 @@ pop.addEventListener('input', e => {
         applyCandleCfg();
         return;
     }
+    if (t.dataset.stHdr) { setHeaderOpt(t.dataset.stHdr, t.checked); return; } /* Status line: Symbol name / Chart value / Bar change */
     if (t.dataset.stLine === 'width') { lineCfg.width = clamp(+t.value || 2, 1, 4); store.set('lineCfg', lineCfg); restyleChart(); return; }
     if (typeof canvasInput === 'function' && canvasInput(t)) return;
 });
@@ -486,7 +489,7 @@ pop.addEventListener('click', e => {
     if (pre) { setColors(...PRE[+pre.dataset.pre]); renderSettings(); return; }
     if (e.target.closest('#stOk') || e.target.closest('#popX')) { pop.hidden = true; closePal(); return; }
     if (e.target.closest('#stReset')) {
-        if (stTab === 'symbol') { Object.assign(lineCfg, LINE_DEFAULT); store.set('lineCfg', lineCfg); const d = JSON.parse(JSON.stringify(CANDLE_DEFAULT)); for (const k of Object.keys(d)) candleCfg[k] = d[k]; applyCandleCfg(); }
+        if (stTab === 'symbol') { Object.assign(lineCfg, LINE_DEFAULT); store.set('lineCfg', lineCfg); const d = JSON.parse(JSON.stringify(CANDLE_DEFAULT)); for (const k of Object.keys(d)) candleCfg[k] = d[k]; applyCandleCfg(); resetHeaderCfg(); }
         else if (typeof resetCanvas === 'function') resetCanvas();
         renderSettings();
         return;
@@ -510,6 +513,8 @@ function renderSymbol() {
         if (chartType !== 'hilo') h += row('Line thickness', `<select data-st-line="width">${[1, 2, 3, 4].map(w => `<option value="${w}"${w === lineCfg.width ? ' selected' : ''}>${w}px</option>`).join('')}</select>`);
         if (chartType === 'hlcarea') h += row('High / Low lines', swatch('body.up') + swatch('body.dn'));
     }
+    h += `<div class="st-sec">STATUS LINE</div>`;
+    h += [['name', 'Symbol name'], ['values', 'Chart value'], ['change', 'Bar change']].map(([k, l]) => row(`<label class="st-chk"><input type="checkbox" data-st-hdr="${k}" ${headerCfg[k] ? 'checked' : ''}><span>${l}</span></label>`, '')).join('');
     h += `<div class="st-sec">PRESETS</div><div class="st-row"><div id="pre">${PRE.map((p, i) => `<button type="button" data-pre="${i}" title="${p[0]} / ${p[1]}" style="background:linear-gradient(90deg,${p[0]} 50%,${p[1]} 50%)"></button>`).join('')}</div></div>`;
     h += `<p class="st-note">Chart type is changed from the button next to Indicators.</p>`;
     return h;
@@ -1126,7 +1131,7 @@ $('cw').addEventListener('contextmenu', e => {
         const t = p.toFixed(map[sym] ? map[sym].dec : 2);
         items.push([`Copy price ${t}`, () => copyText(t)]);
     }
-    items.push(['Settings…', () => setTimeout(openCandleSet, 0)]);
+    items.push(['Setting', () => setTimeout(openCandleSet, 0)]);
     showMenu(e.clientX, e.clientY, items);
 });
 /* ---------- Linear / logarithmic price scale ----------
@@ -1267,17 +1272,100 @@ function resetState() {
     curKey = '';
     window.IND && IND.clear();
 }
-/* ---------- Header (title + daily change of the selected coin) ---------- */
+/* ---------- Chart header (TradingView-style status line, top-left of the chart) ----------
+   Row: [Symbol name] [Chart value: O H L C of the selected candle] [Bar change: +x (+y%)].
+   "Selected candle" = the candle under the crosshair, or the latest candle while the crosshair is off the chart.
+   Each part has its own show/hide toggle in Settings -> Symbol -> Status line. */
+const HEADER_DEFAULT = { name: true, values: true, change: false };
+const headerCfg = Object.assign({}, HEADER_DEFAULT);
+(() => {
+    const saved = store.get('hdr');
+    if (saved && typeof saved === 'object') for (const k of Object.keys(HEADER_DEFAULT)) if (typeof saved[k] === 'boolean') headerCfg[k] = saved[k];
+})();
+function setHeaderOpt(key, on) {
+    if (!(key in HEADER_DEFAULT)) return;
+    headerCfg[key] = !!on;
+    store.set('hdr', headerCfg);
+    headerValues();
+}
+function resetHeaderCfg() {
+    Object.assign(headerCfg, HEADER_DEFAULT);
+    store.set('hdr', headerCfg);
+    headerValues();
+}
+
+/* which prices each chart type reports (TradingView: line-like types show only the close) */
+const HEADER_FIELDS = { line: 'c', linemk: 'c', step: 'c', area: 'c', baseline: 'c', columns: 'c', hlcarea: 'hlc', hilo: 'hl' };
+const HEADER_LABELS = { o: 'O', h: 'H', l: 'L', c: 'C' };
+let hdrTime = null, hdrHtml = null, hdrRaf = 0;
+
+/* index of the candle with exactly this time (data is sorted ascending), -1 when there is none */
+function hdrIndex(t) {
+    let lo = 0, hi = data.length - 1;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1, v = data[mid].time;
+        if (v === t) return mid;
+        if (v < t) lo = mid + 1; else hi = mid - 1;
+    }
+    return -1;
+}
+const hdrNum = (v, dec) => v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+function headerValues() {
+    hdrRaf = 0;
+    const tl = $('tl'), ttl = $('ttl'), hv = $('hv');
+    let html = '';
+    const n = data.length;
+    if (n && (headerCfg.values || headerCfg.change)) {
+        let i = hdrTime == null ? -1 : hdrIndex(hdrTime);
+        if (i < 0) i = n - 1; /* crosshair off the chart or over the empty future area -> latest candle */
+        const ha = chartType === 'ha' && haArr.length === n, src = ha ? haArr : data, b = src[i], prev = src[i - 1];
+        if (b) {
+            const dec = map[sym] ? map[sym].dec : Math.min(8, (String(b.close).split('.')[1] || '').length);
+            const kind = typeKind();
+            const up = window.candleCfg.prevClose && prev ? b.close >= prev.close : b.close >= b.open;
+            const col = kind === 'line' ? lineCfg.color : up ? cUp : cDn;
+            if (headerCfg.values)
+                for (const f of (HEADER_FIELDS[chartType] || 'ohlc'))
+                    html += `<span class="hv-i"><span class="hv-l">${HEADER_LABELS[f]}</span><span class="hv-v">${hdrNum(b[{ o: 'open', h: 'high', l: 'low', c: 'close' }[f]], dec)}</span></span>`;
+            if (headerCfg.change && prev && prev.close) {
+                const d = b.close - prev.close, sg = d >= 0 ? '+' : '−';
+                html += `<span class="hv-i hv-chg">${sg}${hdrNum(Math.abs(d), dec)} (${sg}${Math.abs(d / prev.close * 100).toFixed(2)}%)</span>`;
+            }
+            if (html) html = `<span class="hv-wrap" style="color:${col}">${html}</span>`;
+        }
+    }
+    if (html !== hdrHtml) { hdrHtml = html; hv.innerHTML = html; }
+    hv.hidden = !html;
+    ttl.hidden = !headerCfg.name;
+    tl.hidden = ttl.hidden && hv.hidden;
+    $('cw').classList.toggle('hdr-off', tl.hidden);
+    placeLegend();
+}
+/* coalesce bursts (crosshair moves, live ticks) into one render per frame */
+function scheduleHeaderValues() { if (!hdrRaf) hdrRaf = requestAnimationFrame(headerValues); }
+
+/* the indicator legend sits right under the header, wherever it wraps to (TradingView stacks them the same way) */
+function placeLegend() {
+    const tl = $('tl'), top = tl.hidden ? 8 : tl.offsetTop + tl.offsetHeight + 4;
+    $('cw').style.setProperty('--lg-top', top + 'px');
+}
+if (window.ResizeObserver) new ResizeObserver(placeLegend).observe($('tl'));
+
+chart.subscribeCrosshairMove(p => {
+    const t = p && p.point && p.time != null ? p.time : null;
+    if (t === hdrTime) return;
+    hdrTime = t;
+    scheduleHeaderValues();
+});
+addEventListener('charttypechange', scheduleHeaderValues);
+
+/* Title + document title of the selected coin (the daily price stays in the browser tab title) */
 function header() {
     const s = map[sym], b = sym.replace(/USDT$/, ''), tl = Object.keys(TFS).find(k => TFS[k] === tf);
     $('ttl').textContent = `${b} / TetherUS PERPETUAL CONTRACT · ${tl} · Binance`;
-    if (!s || !s.o) {
-        $('chg').textContent = '';
-        return;
-    }
-    const p = +s.p, d = p - s.o, sg = d >= 0 ? '+' : '−';
-    $('chg').textContent = `${sg}${Math.abs(d).toFixed(s.dec)} (${sg}${Math.abs(s.c).toFixed(2)}%)`;
-    $('chg').style.color = d >= 0 ? cUp : cDn;
+    headerValues();
+    if (!s || !s.o) return;
     document.title = `${fmt(s)} ${b} · Binance Futures`;
 }
 /* ---------- Bar Replay (TradingView style) ----------
@@ -1657,17 +1745,51 @@ var RP = (function () {
 const fmt = s => { const n = (+s.p).toFixed(+s.p > 10 ? 2 : s.dec), [i, d] = n.split('.'); return i.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (d ? '.' + d : ''); };
 const FLAG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 2h2v2h11l-2.5 5 2.5 5H8v8H6z"/></svg>';
 let flags = store.get('flags', {}), flt = '';
-/* Flag cycle: none -> green -> red -> none */
-function toggleFlag(k) {
-    const n = { '': 'g', g: 'r', r: '' }[flags[k] || ''];
-    if (n)
-        flags[k] = n;
+/* Flag colors: picked from a small palette popup (like TradingView), not cycled */
+const FLAG_COLORS = [['r', 'Red'], ['g', 'Green'], ['b', 'Blue']];
+function setFlag(k, c) {
+    if (c)
+        flags[k] = c;
     else
         delete flags[k];
     store.set('flags', flags);
     buildView();
     sched();
 }
+let flPick = null;
+function closeFlagPicker() {
+    if (flPick) {
+        flPick.remove();
+        flPick = null;
+    }
+}
+function toggleFlag(k, anchor) {
+    closeFlagPicker();
+    const el = document.createElement('div');
+    el.id = 'flpick';
+    el.innerHTML = FLAG_COLORS.map(([c, n]) => `<button class="sw ${c}${flags[k] === c ? ' on' : ''}" data-c="${c}" title="${n}">${FLAG}</button>`).join('')
+        + `<button class="sw x" data-c="" title="Remove flag">&#10005;</button>`;
+    document.body.appendChild(el);
+    const r = anchor.getBoundingClientRect();
+    el.style.left = Math.max(4, Math.min(r.left, innerWidth - el.offsetWidth - 4)) + 'px';
+    el.style.top = Math.max(4, Math.min(r.bottom + 4, innerHeight - el.offsetHeight - 4)) + 'px';
+    el.onclick = e => {
+        const b = e.target.closest('button');
+        if (!b)
+            return;
+        closeFlagPicker();
+        setFlag(k, b.dataset.c);
+    };
+    flPick = el;
+}
+document.addEventListener('pointerdown', e => {
+    if (flPick && !flPick.contains(e.target))
+        closeFlagPicker();
+}, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape')
+    closeFlagPicker(); });
+addEventListener('wheel', closeFlagPicker, { passive: true });
+addEventListener('blur', closeFlagPicker);
 $('flt').onclick = e => {
     const b = e.target.closest('button');
     if (!b)
@@ -1884,7 +2006,7 @@ function render() {
     const key = a + '|' + b + '|' + ver + '|' + sym;
     if (key !== lastKey) { /* rows changed -> rebuild */
         lastKey = key;
-        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Flag: green / red / none">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span><b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span><b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
         if (editing) {
             const i = $('in').querySelector('.sni');
             if (i) {
@@ -1927,7 +2049,7 @@ $('list').onclick = e => {
     } /* section header: collapse / expand */
     const f = e.target.closest('.fl');
     if (f) {
-        toggleFlag(f.dataset.f);
+        toggleFlag(f.dataset.f, f);
         return;
     }
     const r = e.target.closest('.row');
@@ -1962,7 +2084,7 @@ $('list').oncontextmenu = e => {
     else
         showMenu(e.clientX, e.clientY, [['Add section', () => addSection(r && r.dataset.s)], ...rst]);
 };
-/* Header click: sort cycle (first direction -> opposite -> default order) */
+/* Header click: sort cycle (first direction <-> opposite; two states only) */
 $('cols').onclick = e => {
     if (e.target.closest('.gr'))
         return;
@@ -1974,10 +2096,8 @@ $('cols').onclick = e => {
         sortKey = k;
         sortDir = first;
     }
-    else if (sortDir === first)
-        sortDir = -first;
     else
-        sortKey = null;
+        sortDir = -sortDir;
     buildView();
     $('list').scrollTop = 0;
     sched();
