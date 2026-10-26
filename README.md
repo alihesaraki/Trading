@@ -14,7 +14,10 @@ A Trading-style market chart UI for **Binance USDT-M Futures**, written in plain
 - Watchlist: search, green/red flag filter, sections, drag & drop ordering, resizable columns, resizable panel that can be moved to the other side.
 - Indicators: SMA, EMA, SMMA, RSI (TradingView-accurate), DMI/ADX, HalfTrend, Volume.
 - Drawing tools: lines, Fibonacci, shapes/brush, annotations, long/short position, measure, fixed-range volume profile; undo/redo; stored per symbol.
-- Bar Replay (TradingView style), linear/log price scale, candle colour and background settings, context menu, keyboard shortcuts.
+- Chart type menu (button next to *Indicators*): Bars, Candles, Hollow candles, Line, Line with markers, Step line, Area, HLC area, Baseline, Columns, High-low, Heikin Ashi (`src/js/app/chart/chart-type.js`; every candle write goes through `setBars()` / `updateBar()`).
+- One TradingView-style **Settings** window (double-click the chart or right-click → *Settings…*) with a *Symbol* tab (candle body / borders / wick colours) and a *Canvas* tab (background, grid lines, crosshair).
+- Indicator settings use TradingView's *Inputs* / *Style* tabs; MA family has Offset + Smoothing, Volume has Volume MA + previous-close colouring.
+- Bar Replay (TradingView style), linear/log price scale, context menu, keyboard shortcuts.
 - Mobile layout: bottom tab bar (Watchlist / Chart / Draw), landscape rail, safe-area handling.
 - Chart time zone is **Asia/Tehran** (`src/js/app/core/time-format.js`).
 
