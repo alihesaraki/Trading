@@ -16,7 +16,11 @@ var INDREG = (function () {
 })();
 var INDKIT = (function () {
     const SRCS = ['close', 'open', 'high', 'low', 'hl2', 'hlc3', 'ohlc4'];
-    const LEN = { k: 'len', l: 'Length', t: 'n', min: 1, max: 500, step: 1 }, SRCF = { k: 'src', l: 'Source', t: 's', o: SRCS }, COL = { k: 'color', l: 'Color', t: 'c' }, WID = { k: 'w', l: 'Line width', t: 'n', min: 1, max: 5, step: 1 };
+    const LSTY = ['Solid', 'Dotted', 'Dashed', 'Large dashed'], LSTY_N = { Solid: 0, Dotted: 1, Dashed: 2, 'Large dashed': 3 };
+    const LEN = { k: 'len', l: 'Length', t: 'n', min: 1, max: 500, step: 1 }, SRCF = { k: 'src', l: 'Source', t: 's', o: SRCS }, COL = { k: 'color', l: 'Color', t: 'c' }, WID = { k: 'w', l: 'Thickness', t: 'n', min: 1, max: 5, step: 1 };
+    const OFFF = { k: 'off', l: 'Offset', t: 'n', min: -500, max: 500, step: 1 };
+    /* Settings window = TradingView's tabs: Inputs (calculation) / Style (colours, lines, plots). A field says which tab it lives on. */
+    const tabOf = f => f.tab || (f.t === 'c' || f.t === 'b' && /^show/.test(f.k) || /Style$/.test(f.k) || f.k === 'w' || f.k === 'op' ? 'style' : 'inputs');
     const rgba = (h, a) => { const hex = /^#[0-9a-f]{6}$/i.test(String(h)) ? String(h) : '#888888'; const n = parseInt(hex.slice(1), 16); const alpha = Math.max(0, Math.min(1, Number(a) || 0)); return alpha === 0 ? 'rgba(0,0,0,0)' : `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${alpha})`; };
     const opac = (p, k) => Math.max(0, Math.min(100, +(p[k + 'Opacity'] ?? 100))) / 100;
     const colorAlpha = (p, k) => rgba(p[k], opac(p, k));
@@ -29,24 +33,67 @@ var INDKIT = (function () {
     const findTime = (d, t) => { let lo = 0, hi = d.length - 1; while (lo <= hi) { const m = (lo + hi) >> 1; if (d[m].time === t) return m; d[m].time < t ? lo = m + 1 : hi = m - 1; } return -1; };
     const anchorAt = (ind, d) => { const a = ind.anchor; if (!a) return -1; const i = findTime(d, a.time); if (i < 0) ind.anchor = null; return i; };
     const setAnchor = (ind, d, idx, value) => { if (ind.settled && !ind.anchor && idx >= 0 && idx < d.length) ind.anchor = { time: d[idx].time, value }; };
-    return { anchorAt, setAnchor, SRCS, LEN, SRCF, COL, WID, rgba, opac, colorAlpha, srcv, cmp, fv, line };
+    return { anchorAt, setAnchor, SRCS, LEN, SRCF, COL, WID, OFFF, LSTY, LSTY_N, tabOf, rgba, opac, colorAlpha, srcv, cmp, fv, line };
 })();
 
-/* Shared factory for the moving-average family (SMA / EMA / SMMA). Each type has its own module file. */
+/* Shared factory for the moving-average family (SMA / EMA / SMMA). Each type has its own module file.
+   Like TradingView's Moving Average indicators: Length, Source, Offset, optional Smoothing MA, line style / thickness / colour. */
 function makeMAModule(name, def, algo) {
-    const { LEN, SRCF, COL, WID, colorAlpha, srcv, line, fv } = INDKIT;
+    const { LEN, SRCF, COL, WID, OFFF, LSTY, LSTY_N, colorAlpha, line, fv } = INDKIT;
+    const SM = ['None', 'SMA', 'EMA', 'SMMA (RMA)', 'WMA', 'VWMA'], hasSm = p => !!p.smType && p.smType !== 'None';
+    /* time of data index i; indices past the last candle are extrapolated on the chart's timeframe grid */
+    const timeAt = (d, i) => {
+        const n = d.length;
+        if (i < 0 || !n) return null;
+        if (i < n) return d[i].time;
+        const k = i - n + 1, last = d[n - 1].time;
+        if (tf === '1M') { const x = new Date(last * 1000); return Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + k, 1) / 1000; }
+        return last + k * (TFMS[tf] / 1000);
+    };
+    /* Offset: shift the plotted points by N candles (positive = into the future, negative = back) */
+    const shift = (d, pts, off) => {
+        if (!off || !pts.length) return pts;
+        const out = [];
+        let j = 0;
+        for (const pt of pts) {
+            while (j < d.length - 1 && d[j].time < pt.time) j++;
+            const t = timeAt(d, j + off);
+            if (t != null) out.push({ time: t, value: pt.value });
+        }
+        return out;
+    };
+    const smooth = (d, pts, p) => {
+        if (!hasSm(p) || !pts.length) return [];
+        const vol = p.smType === 'VWMA' ? new Map(d.map(b => [b.time, Number(b.v) || 0])) : null;
+        const { ma } = RSI_CORE.smooth(p.smType, pts.map(x => x.value), vol ? pts.map(x => vol.get(x.time) || 0) : null, p.smLen), out = [];
+        for (let i = 0; i < pts.length; i++) if (Number.isFinite(ma[i])) out.push({ time: pts[i].time, value: ma[i] });
+        return out;
+    };
     return {
         name,
-        fields: [LEN, SRCF, COL, WID],
-        defaults: def,
-        create: () => [line()],
-        calc: (d, p, ind) => algo.calc(d, p.len, p.src, ind),
-        tail: (d, p, ind) => algo.tail ? algo.tail(d, p.len, p.src, ind) : null,
-        style: ind => ind.s[0].applyOptions({ color: colorAlpha(ind.p, 'color'), lineWidth: ind.p.w, visible: ind.v }),
-        label: ind => `${name} ${ind.p.len} ${ind.p.src}`,
+        fields: [LEN, SRCF, OFFF,
+            { k: 'smType', l: 'Smoothing type', t: 's', o: SM, tab: 'inputs' }, { k: 'smLen', l: 'Smoothing length', t: 'n', min: 1, max: 500, step: 1, tab: 'inputs' },
+            COL, WID, { k: 'lineStyle', l: 'Line style', t: 's', o: LSTY }, { k: 'smColor', l: 'Smoothing line color', t: 'c' }],
+        defaults: Object.assign({ off: 0, lineStyle: 'Solid', smType: 'None', smLen: 14, smColor: '#FFEB3B' }, def),
+        create: () => [line(), line()],
+        calc: (d, p, ind) => {
+            const raw = algo.calc(d, p.len, p.src, ind)[0];
+            return [shift(d, raw, p.off), shift(d, smooth(d, raw, p), p.off)];
+        },
+        /* O(1) live update only for the plain line; offset / smoothing recompute (cheap) through calc() */
+        tail: (d, p, ind) => p.off || hasSm(p) || !algo.tail ? null : algo.tail(d, p.len, p.src, ind),
+        style: ind => {
+            const p = ind.p;
+            ind.s[0].applyOptions({ color: colorAlpha(p, 'color'), lineWidth: p.w, lineStyle: LSTY_N[p.lineStyle] ?? 0, visible: ind.v });
+            ind.s[1].applyOptions({ color: colorAlpha(p, 'smColor'), lineWidth: 1, visible: ind.v && hasSm(p) });
+        },
+        label: ind => `${name} ${ind.p.len} ${ind.p.src}` + (ind.p.off ? ` ${ind.p.off}` : '') + (hasSm(ind.p) ? ` ${ind.p.smType.replace(' (RMA)', '')} ${ind.p.smLen}` : ''),
         color: p => p.color,
-        fmt: (ind, g) => { const a = g(0); return a == null ? '' : fv(a); },
-        need: p => algo.warm ? p.len * algo.warm : p.len
+        fmt: (ind, g) => {
+            const a = g(0), b = hasSm(ind.p) ? g(1) : null;
+            return (a == null ? '' : fv(a)) + (b == null ? '' : ` <span style="color:${ind.p.smColor}">${fv(b)}</span>`);
+        },
+        need: p => (algo.warm ? p.len * algo.warm : p.len) + (hasSm(p) ? p.smLen * (/EMA|SMMA/.test(p.smType) ? 12 : 1) : 0)
     };
 }
 
@@ -220,8 +267,8 @@ INDREG.register('dmi', (function () {
     }
     return {
         name: 'DMI', osc: true,
-        fields: [{ k: 'len', l: 'DI length', t: 'n', min: 1, max: 200, step: 1 }, { k: 'adx', l: 'ADX smoothing', t: 'n', min: 1, max: 200, step: 1 }, WID, { k: 'showP', l: 'Show +DI', t: 'b' }, { k: 'showM', l: 'Show −DI', t: 'b' }, { k: 'showA', l: 'Show ADX', t: 'b' }, { k: 'cp', l: '+DI color', t: 'c' }, { k: 'cm', l: '−DI color', t: 'c' }, { k: 'ca', l: 'ADX color', t: 'c' }],
-        defaults: { len: 14, adx: 14, w: 1, showP: true, showM: true, showA: true, cp: '#26a69a', cm: '#ef5350', ca: '#2962FF' },
+        fields: [{ k: 'adx', l: 'ADX smoothing', t: 'n', min: 1, max: 200, step: 1 }, { k: 'len', l: 'DI length', t: 'n', min: 1, max: 200, step: 1 }, WID, { k: 'showP', l: '+DI', t: 'b' }, { k: 'showM', l: '−DI', t: 'b' }, { k: 'showA', l: 'ADX', t: 'b' }, { k: 'cp', l: '+DI color', t: 'c' }, { k: 'cm', l: '−DI color', t: 'c' }, { k: 'ca', l: 'ADX color', t: 'c' }],
+        defaults: { len: 14, adx: 14, w: 1, showP: true, showM: true, showA: true, cp: '#2962FF', cm: '#FF6D00', ca: '#F23645' } /* TradingView: +DI blue, -DI orange, ADX red */,
         create: ind => {
             const o = { priceScaleId: ind.sid };
             /* one value badge per line on the right edge (same as RSI) */
@@ -230,7 +277,7 @@ INDREG.register('dmi', (function () {
         },
         calc: (d, p) => dmi(d, p.len, p.adx),
         style: ind => ['cp', 'cm', 'ca'].forEach((k, i) => ind.s[i].applyOptions({ color: colorAlpha(ind.p, k), lineWidth: ind.p.w, visible: !!ind.v && [ind.p.showP, ind.p.showM, ind.p.showA][i] !== false })),
-        label: ind => `DMI ${ind.p.len} ${ind.p.adx}`,
+        label: ind => `DMI ${ind.p.adx} ${ind.p.len}`,
         color: p => p.cp,
         fmt: (ind, g) => [0, 1, 2].map(k => { const v = g(k); return `<span style="color:${[ind.p.cp, ind.p.cm, ind.p.ca][k]}">${v == null ? '' : v.toFixed(2)}</span>`; }).join(' '),
         need: p => (p.len + p.adx) * 4,
@@ -361,8 +408,8 @@ INDREG.register('halftrend', (function () {
             const key = trend === 0 ? 'up' : 'dn', col = colorAlpha(p, key), dev = p.dev * a2;
             L.push({ time: b.time, value: v, color: col });
             if (!isNaN(dev)) {
-                H.push({ time: b.time, value: v + dev, color: rgba(p[key], .4 * Math.max(0, Math.min(100, +(p[key + 'Opacity'] ?? 100)) / 100)) });
-                Lo.push({ time: b.time, value: v - dev, color: rgba(p[key], .4 * Math.max(0, Math.min(100, +(p[key + 'Opacity'] ?? 100)) / 100)) });
+                H.push({ time: b.time, value: v + dev });
+                Lo.push({ time: b.time, value: v - dev });
             }
             if (!isNaN(a2)) {
                 if (buy)
@@ -372,19 +419,70 @@ INDREG.register('halftrend', (function () {
             }
         }
         ind.mk = p.ar ? mk : [];
+        ind.fx = { L, H, Lo };
         return [L, H, Lo];
+    }
+    /* Ribbons: the area between the HalfTrend line and each ATR band (upper band = sell colour, lower band = buy colour). */
+    function makePrimitive(ind) {
+        let request = null;
+        const ts = () => chart.timeScale();
+        const ribbon = (c, line, band, s, color) => {
+            const r = ts().getVisibleRange();
+            if (!r || !line.length || !band.length) return;
+            const bm = new Map(band.map(q => [q.time, q.value])), pts = [];
+            for (const q of line) {
+                const bv = bm.get(q.time);
+                if (bv == null) continue;
+                const x = ts().timeToCoordinate(q.time), y1 = s.priceToCoordinate(q.value), y2 = s.priceToCoordinate(bv);
+                if (x != null && y1 != null && y2 != null) pts.push({ x, y1, y2 });
+            }
+            if (pts.length < 2) return;
+            c.beginPath();
+            pts.forEach((q, i) => i ? c.lineTo(q.x, q.y1) : c.moveTo(q.x, q.y1));
+            for (let i = pts.length - 1; i >= 0; i--) c.lineTo(pts[i].x, pts[i].y2);
+            c.closePath();
+            c.fillStyle = color; c.fill();
+        };
+        const view = {
+            zOrder: () => 'bottom',
+            renderer: () => ({
+                draw: target => target.useMediaCoordinateSpace(({ context: c }) => {
+                    const fx = ind.fx, p = ind.p, s = ind.s && ind.s[0];
+                    if (!ind.v || !p.ch || !fx || !s) return;
+                    c.save();
+                    ribbon(c, fx.L, fx.H, s, rgba(p.dn, .12 * opac(p, 'dn')));
+                    ribbon(c, fx.L, fx.Lo, s, rgba(p.up, .12 * opac(p, 'up')));
+                    c.restore();
+                })
+            })
+        };
+        return {
+            attached: params => { request = params.requestUpdate; },
+            detached: () => { request = null; },
+            updateAllViews: () => {},
+            paneViews: () => [view],
+            requestUpdate: () => { if (request) request(); }
+        };
     }
     return {
         name: 'HalfTrend', markers: true,
-        fields: [{ k: 'amp', l: 'Amplitude', t: 'n', min: 1, max: 100, step: 1 }, { k: 'dev', l: 'Channel deviation', t: 'n', min: 0.1, max: 20, step: 0.1 }, WID, { k: 'up', l: 'Up color', t: 'c' }, { k: 'dn', l: 'Down color', t: 'c' }, { k: 'ar', l: 'Buy/Sell arrows', t: 'b' }, { k: 'ch', l: 'Channels', t: 'b' }],
-        defaults: { amp: 2, dev: 2, w: 1, up: '#2962ff', dn: '#f23645', ar: false, ch: false },
-        create: () => [line(), line(), line()],
+        fields: [{ k: 'amp', l: 'Amplitude', t: 'n', min: 1, max: 100, step: 1 }, { k: 'dev', l: 'Channel deviation', t: 'n', min: 0.1, max: 20, step: 0.1 }, WID, { k: 'up', l: 'Up color', t: 'c' }, { k: 'dn', l: 'Down color', t: 'c' }, { k: 'ar', l: 'Show arrows', t: 'b', tab: 'inputs' }, { k: 'ch', l: 'Show channels', t: 'b', tab: 'inputs' }],
+        defaults: { amp: 2, dev: 2, w: 1, up: '#2962ff', dn: '#f23645', ar: true, ch: true },
+        create: ind => {
+            const s = [line(), line(), line()];
+            if (typeof s[0].attachPrimitive === 'function') { ind.prim = makePrimitive(ind); s[0].attachPrimitive(ind.prim); }
+            return s;
+        },
         calc: (d, p, ind) => ht(d, p, ind),
+        clear(ind) { ind.fx = null; ind.mk = []; if (ind.prim) ind.prim.requestUpdate(); },
+        destroy(ind) { if (ind.prim) { try { ind.s[0].detachPrimitive(ind.prim); } catch (e) { /* series already removed */ } ind.prim = null; } },
         style(ind) {
             const p = ind.p;
             ind.s[0].applyOptions({ color: colorAlpha(p, 'up'), lineWidth: p.w, visible: ind.v });
-            ind.s[1].applyOptions({ color: rgba(p.up, .4 * opac(p, 'up')), lineWidth: p.w, visible: ind.v && p.ch });
-            ind.s[2].applyOptions({ color: rgba(p.dn, .4 * opac(p, 'dn')), lineWidth: p.w, visible: ind.v && p.ch });
+            /* upper band = sell colour, lower band = buy colour (as in the TradingView script) */
+            ind.s[1].applyOptions({ color: rgba(p.dn, .6 * opac(p, 'dn')), lineWidth: p.w, visible: ind.v && p.ch });
+            ind.s[2].applyOptions({ color: rgba(p.up, .6 * opac(p, 'up')), lineWidth: p.w, visible: ind.v && p.ch });
+            if (ind.prim) ind.prim.requestUpdate();
         },
         label: ind => `HalfTrend ${ind.p.amp} ${ind.p.dev}`,
         color: p => p.up,
@@ -760,30 +858,45 @@ INDREG.register('smma', makeMAModule('SMMA', { len: 200, src: 'close', color: '#
     }
 }));
 
-/* Volume histogram (overlaid at the bottom of the price pane) */
+/* Volume histogram (overlaid at the bottom of the price pane), like TradingView's Volume:
+   "Color based on previous close", optional Volume MA line (SMA, default length 20), rising / falling colours with 50 % opacity. */
 INDREG.register('volume', (function () {
-    const { rgba, cmp } = INDKIT;
-    const base = (b, p) => p.custom ? (b.close >= b.open ? p.upColor : p.dnColor) : (b.close >= b.open ? cUp : cDn);
-    const pt = (b, p) => ({ time: b.time, value: b.v || 0, color: rgba(base(b, p), p.op / 100) });
+    const { rgba, cmp, line, OFFF } = INDKIT;
+    const isUp = (b, prev, p) => p.pc && prev ? b.close >= prev.close : b.close >= b.open;
+    const base = (b, prev, p) => { const up = isUp(b, prev, p); return p.custom ? (up ? p.upColor : p.dnColor) : (up ? cUp : cDn); };
+    const pt = (b, prev, p) => ({ time: b.time, value: b.v || 0, color: rgba(base(b, prev, p), p.op / 100) });
+    const maAt = (d, i, len) => { if (i < len - 1) return null; let s = 0; for (let k = i - len + 1; k <= i; k++) s += d[k].v || 0; return { time: d[i].time, value: s / len }; };
     return {
         name: 'Volume', vol: true,
-        fields: [{ k: 'upColor', l: 'Up color', t: 'c' }, { k: 'dnColor', l: 'Down color', t: 'c' }, { k: 'op', l: 'Opacity %', t: 'n', min: 10, max: 100, step: 5 }, { k: 'ht', l: 'Height %', t: 'n', min: 5, max: 60, step: 5 }],
-        defaults: { op: 55, ht: 20, custom: false, upColor: '#0f9d7a', dnColor: '#f7e21f' },
-        create: () => [chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol', lastValueVisible: false, priceLineVisible: false })],
-        calc: (d, p) => [d.map(b => pt(b, p))],
-        tail: (d, p) => d.length ? [pt(d[d.length - 1], p)] : null,
-        style: ind => ind.s[0].applyOptions({ visible: ind.v }),
-        label: () => 'Volume',
+        fields: [
+            { k: 'pc', l: 'Color based on previous close', t: 'b', tab: 'inputs' }, { k: 'maLen', l: 'Volume MA length', t: 'n', min: 1, max: 500, step: 1, tab: 'inputs' },
+            { k: 'upColor', l: 'Rising color', t: 'c' }, { k: 'dnColor', l: 'Falling color', t: 'c' }, { k: 'op', l: 'Opacity %', t: 'n', min: 10, max: 100, step: 5, tab: 'style' },
+            { k: 'showMA', l: 'Show volume MA', t: 'b' }, { k: 'maColor', l: 'Volume MA color', t: 'c' }, { k: 'ht', l: 'Height %', t: 'n', min: 5, max: 60, step: 5, tab: 'style' }],
+        defaults: { op: 50, ht: 20, custom: false, upColor: '#089981', dnColor: '#F23645', pc: false, maLen: 20, showMA: false, maColor: '#2962FF' },
+        create: () => [
+            chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol', lastValueVisible: false, priceLineVisible: false }),
+            line({ priceScaleId: 'vol', lineWidth: 1, priceFormat: { type: 'volume' } })],
+        calc: (d, p) => {
+            const ma = [];
+            if (p.showMA) for (let i = 0; i < d.length; i++) { const m = maAt(d, i, p.maLen); if (m) ma.push(m); }
+            return [d.map((b, i) => pt(b, d[i - 1], p)), ma];
+        },
+        tail: (d, p) => { const n = d.length; return n ? [pt(d[n - 1], d[n - 2], p), p.showMA ? maAt(d, n - 1, p.maLen) : null] : null; },
+        style: ind => {
+            ind.s[0].applyOptions({ visible: ind.v });
+            ind.s[1].applyOptions({ color: rgba(ind.p.maColor, 1), visible: ind.v && !!ind.p.showMA });
+        },
+        label: ind => 'Volume' + (ind.p.showMA ? ` MA ${ind.p.maLen}` : ''),
         color: p => p.custom ? p.upColor : '#d1d4dc',
-        fmt: (ind, g) => { const a = g(0); return a == null ? '' : cmp(a); },
+        fmt: (ind, g) => { const a = g(0), m = ind.p.showMA ? g(1) : null; return (a == null ? '' : cmp(a)) + (m == null ? '' : ` <span style="color:${ind.p.maColor}">${cmp(m)}</span>`); },
         /* picking a colour switches the bars from "follow the candle colours" to the chosen colours */
         edited: (ind, k) => { if (k === 'upColor' || k === 'dnColor') ind.p.custom = true; },
-        need: () => 1
+        need: p => Math.max(1, p.showMA ? p.maLen : 1)
     };
 })());
 
 /* Indicator engine: owns the list of active indicators, their chart series, legend, settings panel and menu.
-   All indicator-specific logic lives in modules/*.js (see core/kit.js for the module contract). */
+   All indicator-specific logic lives in modules/*.js (see 00-kit.js for the module contract). */
 var IND = (function () {
     const { colorAlpha } = INDKIT;
     const M = t => INDREG.get(t);
@@ -1094,10 +1207,17 @@ var IND = (function () {
     });
     addEventListener('pointerup', () => { settingsDrag = null; });
     addEventListener('pointercancel', () => { settingsDrag = null; });
+    /* TradingView layout: one window with an Inputs tab (calculation) and a Style tab (colours, lines, plots) */
+    let setTab = store.get('isTab', 'inputs') === 'style' ? 'style' : 'inputs';
     function openSet(ind, row) {
         setId = ind.id;
-        const D = M(ind.t);
-        $('iset').innerHTML = `<div class="ih"><b>${D.name}</b><button type="button" data-a="close" title="Close settings" aria-label="Close ${D.name} settings">✕</button></div>${[...D.fields.filter(f => f.t !== 'c'), ...D.fields.filter(f => f.t === 'c')].map(f => field(ind, f)).join('')}<div class="if"><button data-a="def">Defaults</button></div>`;
+        const D = M(ind.t), { tabOf } = INDKIT, inputs = D.fields.filter(f => tabOf(f) === 'inputs'), style = D.fields.filter(f => tabOf(f) === 'style');
+        const tabs = [['inputs', 'Inputs', inputs], ['style', 'Style', style]].filter(t => t[2].length);
+        if (!tabs.some(t => t[0] === setTab)) setTab = tabs[0][0];
+        $('iset').innerHTML = `<div class="ih"><b>${D.name}</b><button type="button" data-a="close" title="Close settings" aria-label="Close ${D.name} settings">✕</button></div>`
+            + (tabs.length > 1 ? `<div class="itabs" role="tablist">${tabs.map(t => `<button type="button" role="tab" data-itab="${t[0]}" class="${t[0] === setTab ? 'on' : ''}" aria-selected="${t[0] === setTab}">${t[1]}</button>`).join('')}</div>` : '')
+            + tabs.map(t => `<div class="ipane" data-ipane="${t[0]}"${t[0] === setTab ? '' : ' hidden'}>${t[2].map(f => field(ind, f)).join('')}</div>`).join('')
+            + `<div class="if"><button data-a="def">Defaults</button></div>`;
         $('iset').hidden = false;
         const area = $('cw').getBoundingClientRect(), rr = row.getBoundingClientRect();
         $('iset').style.left = Math.max(0, Math.min(area.width - $('iset').offsetWidth, rr.left - area.left)) + 'px';
@@ -1139,6 +1259,13 @@ var IND = (function () {
         changed(ind);
     });
     $('iset').addEventListener('click', e => {
+        const tabBtn = e.target.closest('[data-itab]');
+        if (tabBtn) {
+            setTab = tabBtn.dataset.itab; store.set('isTab', setTab);
+            $('iset').querySelectorAll('[data-itab]').forEach(b => { const on = b === tabBtn; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+            $('iset').querySelectorAll('[data-ipane]').forEach(p => { p.hidden = p.dataset.ipane !== setTab; p.querySelectorAll('.icolor-panel').forEach(x => { x.hidden = true; }); });
+            return;
+        }
         const toggle = e.target.closest('[data-color-toggle]');
         if (toggle) { const k = toggle.dataset.colorToggle, panel = $('iset').querySelector(`[data-color-panel="${k}"]`), wasOpen = panel && !panel.hidden; $('iset').querySelectorAll('.icolor-panel').forEach(p => { p.hidden = true; p.style.position = ''; }); $('iset').querySelectorAll('[data-color-toggle]').forEach(b => b.setAttribute('aria-expanded', 'false')); if (panel && !wasOpen) { const tr = toggle.getBoundingClientRect(), pr = $('iset').getBoundingClientRect(); panel.hidden = false; panel.style.position = 'fixed'; panel.style.zIndex = '1000'; panel.style.left = Math.max(8, Math.min(window.innerWidth - 190, pr.left + Math.max(0, Math.min(pr.width - 190, tr.right - pr.left - 190)))) + 'px'; panel.style.top = (tr.bottom + 4 + 150 < window.innerHeight ? tr.bottom + 4 : Math.max(8, tr.top - 154)) + 'px'; toggle.setAttribute('aria-expanded', 'true'); } return; }
         const target = e.target.closest('[data-palette]');
@@ -1235,6 +1362,7 @@ var IND = (function () {
         $('imenu').hidden = !open;
         $('btnInd').setAttribute('aria-expanded', String(open));
         $('pop').hidden = true;
+        if (typeof closeTypeMenu === 'function') closeTypeMenu();
         if (open)
             positionIndicatorMenu();
     };
@@ -1327,7 +1455,8 @@ var IND = (function () {
     store.set('indsV', 2);
     store.get('inds', []).filter(x => M(x.t)).forEach(x => {
         const ind = { t: x.t, p: Object.assign({}, M(x.t).defaults, x.p), v: x.v !== false };
-        if (x.t === 'dmi' && ind.p.ca === '#ff9800') ind.p.ca = '#2962FF'; /* ADX default colour is now blue */
+        /* DMI: earlier default colours (green / red / blue) -> TradingView's (blue / orange / red) */
+        if (x.t === 'dmi' && (ind.p.ca === '#ff9800' || (ind.p.cp === '#26a69a' && ind.p.cm === '#ef5350' && /^#2962ff$/i.test(ind.p.ca)))) Object.assign(ind.p, { cp: '#2962FF', cm: '#FF6D00', ca: '#F23645' });
         if (migrate && 'w' in ind.p)
             ind.p.w = 1;
         create(ind);

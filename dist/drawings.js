@@ -14,6 +14,25 @@
   };
 
   // math
+  /* Adaptive price text. Never fewer decimals than the symbol's own (dec); small prices get up to 8 decimals,
+     large prices only as many as keep the value readable. Zeros beyond the symbol's decimals are trimmed. */
+  function fmtPrice(p, dec = 2) {
+    const v = +p;
+    if (!Number.isFinite(v)) return "";
+    const a = Math.abs(v);
+    const want = a >= 1e3 ? 2 : a >= 100 ? 3 : a >= 1 ? 4 : a >= 0.1 ? 5 : a >= 0.01 ? 6 : a >= 0.001 ? 7 : 8;
+    const keep = Math.max(0, Math.min(8, dec | 0));
+    const places = Math.min(8, Math.max(keep, want));
+    let t = v.toFixed(places);
+    if (places > keep) {
+      t = t.replace(/0+$/, "");
+      const i = t.indexOf(".");
+      const have = i < 0 ? 0 : t.length - i - 1;
+      if (have < keep) t = v.toFixed(keep);
+      else if (t.endsWith(".")) t = t.slice(0, -1);
+    }
+    return t;
+  }
   var dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   function distToSegment(p, a, b) {
     const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
@@ -61,18 +80,29 @@
     return m;
   }
   function simplify(pts2, eps) {
-    if (pts2.length < 3) return pts2.slice();
-    let idx = 0, dmax = 0;
-    for (let i = 1; i < pts2.length - 1; i++) {
-      const d2 = distToSegment(pts2[i], pts2[0], pts2[pts2.length - 1]);
-      if (d2 > dmax) {
-        dmax = d2;
-        idx = i;
+    const n = pts2.length;
+    if (n < 3) return pts2.slice();
+    const keep = new Uint8Array(n);
+    keep[0] = keep[n - 1] = 1;
+    const stack = [0, n - 1];
+    while (stack.length) {
+      const hi = stack.pop(), lo = stack.pop();
+      let idx = -1, dmax = eps;
+      for (let i = lo + 1; i < hi; i++) {
+        const d2 = distToSegment(pts2[i], pts2[lo], pts2[hi]);
+        if (d2 > dmax) {
+          dmax = d2;
+          idx = i;
+        }
+      }
+      if (idx > 0) {
+        keep[idx] = 1;
+        stack.push(lo, idx, idx, hi);
       }
     }
-    if (dmax <= eps) return [pts2[0], pts2[pts2.length - 1]];
-    const l = simplify(pts2.slice(0, idx + 1), eps), r = simplify(pts2.slice(idx), eps);
-    return l.slice(0, -1).concat(r);
+    const out = [];
+    for (let i = 0; i < n; i++) if (keep[i]) out.push(pts2[i]);
+    return out;
   }
   function arrowHead(from, tip, size) {
     const ang = Math.atan2(tip.y - from.y, tip.x - from.x), s = Math.PI / 7;
@@ -540,37 +570,29 @@
     hotkey: side === "long" ? "Ctrl+Alt+Shift+L" : "Ctrl+Alt+Shift+S",
     hideCoords: true,
     fields: [
-      { key: "points.0.price", label: "Entry price", type: "number", step: "any", get: (d2) => clean(d2.points[0].price), set: (d2, v, m) => {
+      { key: "points.0.price", label: "Entry price", type: "number", step: "any", get: (d2, m) => fmtPrice(d2.points[0].price, m.decimals()), set: (d2, v, m) => {
         const dir = side === "long" ? 1 : -1, tick = tickOf(m), P = d2.points;
         const lo = (dir > 0 ? P[2].price : P[1].price) + tick, hi = (dir > 0 ? P[1].price : P[2].price) - tick;
         P[0].price = Math.min(Math.max(v, lo), Math.max(lo, hi));
         P[3].price = P[0].price;
       } },
-      { key: "points.1.price", label: "Target price", type: "number", step: "any", get: (d2) => clean(d2.points[1].price), set: (d2, v, m) => {
-        const dir = side === "long" ? 1 : -1, lim = d2.points[0].price + dir * tickOf(m);
-        d2.points[1].price = dir > 0 ? Math.max(v, lim) : Math.min(v, lim);
-      } },
-      { key: "points.2.price", label: "Stop price", type: "number", step: "any", get: (d2) => clean(d2.points[2].price), set: (d2, v, m) => {
+      { key: "points.2.price", label: "Stop loss", type: "number", step: "any", get: (d2, m) => fmtPrice(d2.points[2].price, m.decimals()), set: (d2, v, m) => {
         const dir = side === "long" ? 1 : -1, lim = d2.points[0].price - dir * tickOf(m);
         d2.points[2].price = dir > 0 ? Math.min(v, lim) : Math.max(v, lim);
       } },
-      { key: "points.rr", label: "Risk/Reward", type: "number", min: 0.01, step: 0.1, get: (d2) => {
+      { key: "points.1.price", label: "Take profit", type: "number", step: "any", get: (d2, m) => fmtPrice(d2.points[1].price, m.decimals()), set: (d2, v, m) => {
+        const dir = side === "long" ? 1 : -1, lim = d2.points[0].price + dir * tickOf(m);
+        d2.points[1].price = dir > 0 ? Math.max(v, lim) : Math.min(v, lim);
+      } },
+      { key: "points.rr", label: "Risk/Reward ratio", type: "number", min: 0.01, step: "any", get: (d2) => {
         const k = Math.abs(d2.points[0].price - d2.points[2].price);
         return k > 0 ? +(Math.abs(d2.points[1].price - d2.points[0].price) / k).toFixed(2) : 0;
       }, set: (d2, v) => {
         const k = Math.abs(d2.points[0].price - d2.points[2].price);
         if (k > 0) d2.points[1].price = clean(d2.points[0].price + (side === "long" ? 1 : -1) * k * Math.max(0.01, v));
       } },
-      { key: "props.account", label: "Account size", type: "number", min: 1, max: 1e12, step: 100 },
-      { key: "props.riskPct", label: "Risk %", type: "number", min: 0.01, max: 100, step: 0.25 },
-      { key: "props.leverage", label: "Leverage", type: "number", min: 1, max: 1e3, step: 1 },
-      { key: "props.feePct", label: "Fee % per side", type: "number", min: 0, max: 5, step: 0.01 },
-      { key: "props.qtyDec", label: "Qty decimals", type: "number", min: 0, max: 8, step: 1 },
-      { key: "props.currency", label: "Currency", type: "text" },
       { key: "props.profitColor", label: "Profit color", type: "color", get: (d2) => d2.props.profitColor || GREEN },
-      { key: "props.stopColor", label: "Stop color", type: "color", get: (d2) => d2.props.stopColor || RED },
-      F.textColor,
-      F.fontSize
+      { key: "props.stopColor", label: "Stop color", type: "color", get: (d2) => d2.props.stopColor || RED }
     ],
     props: { account: 1e4, riskPct: 1, leverage: 1, feePct: 0, qtyDec: 3, currency: "USDT", profitColor: GREEN, stopColor: RED },
     style: { fontSize: 12 },
@@ -913,9 +935,10 @@
         this.items = this.items.filter((d2) => !ids.includes(d2.id));
       });
     }
-    clear() {
+    /** remove every drawing, or only those matching `pred` */
+    clear(pred) {
       this.mutate(() => {
-        this.items = [];
+        this.items = pred ? this.items.filter((d2) => !pred(d2)) : [];
       });
     }
     update(id, fn) {
@@ -972,10 +995,11 @@
         if (d2) d2.z = this.items.reduce((m, x) => Math.min(m, x.z), 0) - 1;
       });
     }
-    setAll(prop, v) {
+    /** set a property on every drawing, or only on those matching `pred` */
+    setAll(prop, v, pred) {
       this.mutate(() => {
         this.items.forEach((d2) => {
-          d2[prop] = v;
+          if (!pred || pred(d2)) d2[prop] = v;
         });
       });
     }
@@ -1305,6 +1329,9 @@
       this.swallow = false;
       this.raf = 0;
       this.lastPointer = null;
+      this.hold = null; /* Ctrl-held temporary Brush: { tool, mode } to restore on release */
+      this.holdPending = false;
+      this.draftDirty = false;
       this.lastDrawingTap = null;
       this.qm = null;
       this.qmDirty = false;
@@ -1425,7 +1452,7 @@
           const prev = d2.points[g.idx > 0 ? g.idx - 1 : 0];
           const from = this.ctx().px(prev) ?? void 0;
           const pp = g.off ? { x: p.x + g.off.x, y: p.y + g.off.y } : p;
-          let a = this.anchorAt(pp, e, d2.points.length > 1 && !t.dragHandle ? from : void 0);
+          let a = this.anchorAt(pp, e, d2.points.length > 1 && !t.dragHandle ? from : void 0, d2.points.length > 1 && !t.dragHandle ? prev : void 0);
           if (!a) return;
           if (t.dragHandle) {
             t.dragHandle(d2, g.idx, a, this.m);
@@ -1457,6 +1484,10 @@
         else if (g?.k === "qm") this.qmUp(this.local(e), e);
         else if (g?.k === "erase") {
           this.store.end();
+        }
+        if (this.holdPending) {
+          this.holdPending = false;
+          this.endHoldBrush();
         }
       };
       this.onDbl = (e) => {
@@ -1491,13 +1522,13 @@
         if (!this.selection.has(d2.id)) this.select([d2.id]);
         this.hooks.menu?.(e.clientX, e.clientY, this.menuItems(d2));
       };
-      /* Arrow keys nudge the selected Long / Short position: left/right = one bar, up/down = a few pixels of price. */
+      /* Arrow keys nudge the selected drawings: left/right = one bar, up/down = a few pixels of price. */
       this.onArrow = (e) => {
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
         if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || this.tool || this.draft || this.gesture) return;
         const t = e.target;
         if (t && (t.isContentEditable || t.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]'))) return;
-        const pos = this.selected().filter((d2) => (d2.type === "long" || d2.type === "short") && !d2.locked && !d2.hidden);
+        const pos = this.selected().filter((d2) => !d2.locked && !d2.hidden);
         if (!pos.length) return;
         e.preventDefault();
         e.stopPropagation();
@@ -1519,6 +1550,10 @@
         this.store.touch();
         clearTimeout(this.arrowT);
         this.arrowT = setTimeout(() => this.store.end(), 500);
+      };
+      /* Pressing / releasing Shift while a line is being drawn re-evaluates the straight-line snap without a mouse move. */
+      this.onShift = (e) => {
+        if (e.key === "Shift" && this.draft && !this.draft.free && this.lastPointer) this.updatePreview(this.lastPointer, { shiftKey: e.type === "keydown" });
       };
       this.onKey = (e) => {
         const t = e.target;
@@ -1551,7 +1586,7 @@
           this.duplicateSelection();
           return;
         }
-        if (mod && k === "a" && !this.tool) {
+        if (mod && k === "a" && (!this.tool || this.hold)) {
           e.preventDefault();
           this.select(this.store.items.filter((d2) => !d2.hidden).map((d2) => d2.id));
           return;
@@ -1620,6 +1655,17 @@
           this.setTool(t2.type);
         }
       };
+      /* Hold Ctrl = temporary Brush (left button draws); releasing Ctrl restores the previous tool / mode. */
+      this.onCtrlDown = (e) => {
+        if (e.key !== "Control" || e.repeat) return;
+        const t = e.target;
+        if (t && (t.isContentEditable || t.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]'))) return;
+        this.beginHoldBrush();
+      };
+      this.onCtrlUp = (e) => {
+        if (e.key === "Control") this.endHoldBrush();
+      };
+      this.onBlur = () => this.endHoldBrush();
       const NS = "http://www.w3.org/2000/svg";
       this.svg = document.createElementNS(NS, "svg");
       this.svg.setAttribute("class", "dr-svg");
@@ -1642,6 +1688,11 @@
       h.addEventListener("contextmenu", this.onCtx, true);
       document.addEventListener("keydown", this.onKey);
       document.addEventListener("keydown", this.onArrow, true);
+      document.addEventListener("keydown", this.onShift);
+      document.addEventListener("keyup", this.onShift);
+      document.addEventListener("keydown", this.onCtrlDown);
+      document.addEventListener("keyup", this.onCtrlUp);
+      window.addEventListener("blur", this.onBlur);
       const loop = () => {
         this.raf = requestAnimationFrame(loop);
         this.frame();
@@ -1652,6 +1703,11 @@
       cancelAnimationFrame(this.raf);
       document.removeEventListener("keydown", this.onKey);
       document.removeEventListener("keydown", this.onArrow, true);
+      document.removeEventListener("keydown", this.onShift);
+      document.removeEventListener("keyup", this.onShift);
+      document.removeEventListener("keydown", this.onCtrlDown);
+      document.removeEventListener("keyup", this.onCtrlUp);
+      window.removeEventListener("blur", this.onBlur);
       this.host.removeEventListener("pointerdown", this.onDown, true);
       this.host.removeEventListener("pointermove", this.onHover, true);
       this.host.removeEventListener("pointerleave", this.onLeave, true);
@@ -1685,7 +1741,33 @@
       this.hooks.changed?.();
       return true;
     }
+    beginHoldBrush() {
+      if (this.hold || this.draft || this.gesture || this.qm || !TOOL_MAP.brush) return;
+      this.hold = { tool: this.tool, mode: this.mode };
+      this.tool = "brush";
+      this.mode = "cursor";
+      this.dirty = true;
+      this.updateCursor();
+      this.hooks.changed?.();
+    }
+    endHoldBrush() {
+      if (!this.hold) return;
+      if (this.gesture?.k === "draw") {
+        this.holdPending = true;
+        return;
+      }
+      const h = this.hold;
+      this.hold = null;
+      this.holdPending = false;
+      if (this.draft) this.cancelDraft();
+      this.tool = h.tool;
+      this.mode = h.mode;
+      this.dirty = true;
+      this.updateCursor();
+      this.hooks.changed?.();
+    }
     setTool(t) {
+      this.hold = null;
       this.clearQM();
       if (this.draft) this.cancelDraft();
       this.tool = t;
@@ -1698,6 +1780,7 @@
       this.hooks.changed?.();
     }
     setMode(m) {
+      this.hold = null;
       this.clearQM();
       this.cancelDraft();
       this.tool = null;
@@ -1731,7 +1814,7 @@
           const x = m.timeToX(a.time), y = m.priceToY(a.price);
           return x == null || y == null ? null : { x, y };
         },
-        price: (p) => p.toFixed(dec)
+        price: (p) => fmtPrice(p, dec)
       };
     }
     primsOf(d2, c = this.ctx()) {
@@ -1780,13 +1863,21 @@
       const r = this.m.plot();
       return p.x >= 0 && p.y >= 0 && p.x <= r.w && p.y <= r.h;
     }
-    anchorAt(p, e, from) {
-      let q = p;
+    /* `from` = pixel of the previous point, `fromA` = its exact anchor. Shift snaps the segment to the nearest 45 degrees;
+       horizontal / vertical results copy the price / time of `fromA` so the line is exactly level / plumb. */
+    anchorAt(p, e, from, fromA) {
+      let q = p, snap = 0;
       if (e.shiftKey && from) {
-        const dx = p.x - from.x, dy = p.y - from.y, r = Math.hypot(dx, dy), a = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+        const dx = p.x - from.x, dy = p.y - from.y, r = Math.hypot(dx, dy), k = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)), a = k * (Math.PI / 4);
         q = { x: from.x + r * Math.cos(a), y: from.y + r * Math.sin(a) };
+        snap = k % 4 === 0 ? 1 : Math.abs(k) % 4 === 2 ? 2 : 0;
       }
-      return pointToAnchor(this.m, q.x, q.y);
+      const an = pointToAnchor(this.m, q.x, q.y);
+      if (an && fromA) {
+        if (snap === 1) an.price = fromA.price;
+        else if (snap === 2) an.time = fromA.time;
+      }
+      return an;
     }
     /* ---------- event handlers ---------- */
     ignoreTarget(e) {
@@ -1849,12 +1940,12 @@
     /* --- drawing --- */
     drawDown(p, e) {
       const def = TOOL_MAP[this.tool];
-      const a = this.anchorAt(p, e, this.draft ? this.ctx().px(this.draft.d.points[this.draft.d.points.length - 1]) ?? void 0 : void 0);
+      const a = this.anchorAt(p, e, this.draft ? this.ctx().px(this.draft.d.points[this.draft.d.points.length - 1]) ?? void 0 : void 0, this.draft ? this.draft.d.points[this.draft.d.points.length - 1] : void 0);
       this.gesture = { k: "draw" };
       if (!a) return;
       if (!this.draft) {
         const d2 = makeDrawing(def.type, [a], this.store.toolDefaults(def.type));
-        this.draft = { d: d2, preview: a, down: p, moved: false, free: def.points === "free" };
+        this.draft = { d: d2, preview: a, down: p, moved: false, free: def.points === "free", px: def.points === "free" ? [{ x: p.x, y: p.y }] : null };
         if (def.points === 1) {
           this.finishDraft();
           return;
@@ -1873,10 +1964,10 @@
     updatePreview(p, e) {
       if (!this.draft) return;
       const pts2 = this.draft.d.points, last = this.ctx().px(pts2[pts2.length - 1]) ?? void 0;
-      const a = this.anchorAt(p, e, last);
+      const a = this.anchorAt(p, e, last, pts2[pts2.length - 1]);
       if (a) {
         this.draft.preview = a;
-        this.dirty = true;
+        this.draftDirty = true;
       }
     }
     drawMove(p, e) {
@@ -1884,12 +1975,15 @@
       if (!dr) return;
       if (Math.hypot(p.x - dr.down.x, p.y - dr.down.y) > 4) dr.moved = true;
       if (dr.free) {
-        const last = this.ctx().px(dr.d.points[dr.d.points.length - 1]);
+        /* pixel-space stroke: cheap distance test, no per-move chart lookups; anchors are stored for the final drawing */
+        const px = dr.px || (dr.px = []), last = px[px.length - 1];
         if (!last || Math.hypot(p.x - last.x, p.y - last.y) >= 2) {
+          if (px.length >= 6000) return;
           const a = pointToAnchor(this.m, p.x, p.y);
           if (a) {
+            px.push({ x: p.x, y: p.y });
             dr.d.points.push(a);
-            this.dirty = true;
+            this.draftDirty = true;
           }
         }
       } else this.updatePreview(p, e);
@@ -1941,7 +2035,7 @@
       def.init?.(d2, this.m);
       this.store.add(d2);
       this.gesture = null;
-      if (!this.stay) {
+      if (!this.stay && !this.hold) {
         this.tool = null;
         this.updateCursor();
       }
@@ -2093,8 +2187,13 @@
         this.sig = s;
         this.lastRev = this.store.rev;
         this.dirty = false;
+        this.draftDirty = false;
         this.render();
         this.qmDirty = !!this.qm || this.qmDirty;
+      } else if (this.draftDirty) {
+        /* a stroke / preview changed: repaint only the draft layer, not every drawing */
+        this.draftDirty = false;
+        this.renderDraft(this.ctx());
       }
       if (this.qmDirty) {
         this.qmDirty = false;
@@ -2112,14 +2211,7 @@
         parts.push(`<g data-id="${d2.id}"${d2.locked ? ' class="dr-locked"' : ""}>${prims.map(primToSvg).join("")}</g>`);
       }
       this.layer.innerHTML = parts.join("");
-      if (this.draft) {
-        const t = TOOL_MAP[this.draft.d.type], need = typeof t.points === "number" ? t.points : this.draft.d.points.length + 1;
-        const pts2 = [...this.draft.d.points];
-        if (!this.draft.free) while (pts2.length < need) pts2.push(this.draft.preview);
-        if (t.points === "multi") pts2.push(this.draft.preview);
-        const tmp = { ...this.draft.d, points: pts2, draft: true };
-        this.draftLayer.innerHTML = `<g opacity="0.9">${this.primsOf(tmp, c).map(primToSvg).join("")}</g>`;
-      } else this.draftLayer.innerHTML = "";
+      this.renderDraft(c);
       const hp = [];
       for (const d2 of this.selected()) {
         if (d2.hidden) continue;
@@ -2127,6 +2219,25 @@
       }
       this.handlesLayer.innerHTML = hp.join("");
       this.hooks.changed?.();
+    }
+    renderDraft(c) {
+      if (!this.draft) {
+        if (this.draftLayer.firstChild) this.draftLayer.innerHTML = "";
+        return;
+      }
+      const dr = this.draft, t = TOOL_MAP[dr.d.type];
+      if (dr.free && dr.px) {
+        /* live stroke straight from pixels */
+        const prim = { k: "poly", pts: dr.px, ...strokeOf(dr.d.style) };
+        this.draftLayer.innerHTML = `<g opacity="0.9">${primToSvg(prim)}</g>`;
+        return;
+      }
+      const need = typeof t.points === "number" ? t.points : dr.d.points.length + 1;
+      const pts2 = [...dr.d.points];
+      if (!dr.free) while (pts2.length < need) pts2.push(dr.preview);
+      if (t.points === "multi") pts2.push(dr.preview);
+      const tmp = { ...dr.d, points: pts2, draft: true };
+      this.draftLayer.innerHTML = `<g opacity="0.9">${this.primsOf(tmp, c).map(primToSvg).join("")}</g>`;
     }
     /** bounding box (svg-local px) of the current selection's handles, for the floating toolbar */
     selectionBox() {
@@ -2194,10 +2305,17 @@
     copy: d("M8 8h11v13H8zM5 16V3h11"),
     gear: d("M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z") + `<circle cx="12" cy="12" r="3" fill="none"/>`
   };
+  /* Warm the browser cache (fetch + decode) as soon as the script runs so the Long/Short icons are ready on first paint. */
+  if (typeof Image === "function") for (const src of ["assets/images/long-position.png", "assets/images/short-position.png"]) {
+    const im = new Image();
+    im.decoding = "sync";
+    im.src = src;
+    im.decode?.().catch(() => {});
+  }
   var icon = (k, s = 20) => {
     if (k === "long" || k === "short") {
       const src = k === "long" ? "assets/images/long-position.png" : "assets/images/short-position.png";
-      return `<img class="dr-position-icon" src="${src}" alt="" aria-hidden="true" width="${s}" height="${s}" style="width:${s}px;height:${s}px;object-fit:contain;vertical-align:middle;display:inline-block" />`;
+      return `<img class="dr-position-icon" src="${src}" alt="" aria-hidden="true" loading="eager" decoding="sync" draggable="false" width="${s}" height="${s}" style="width:${s}px;height:${s}px;object-fit:contain;vertical-align:middle;display:inline-block" />`;
     }
     return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${IC[k] ?? IC.trend}</svg>`;
   };
@@ -2234,6 +2352,9 @@
     for (let k = 0; k < 2; k++) { const o = wallParts(t); t += asUtc - Date.UTC(+o.year, +o.month - 1, +o.day, +o.hour, +o.minute, +o.second) / 1e3; }
     return t;
   };
+  /* last selected tab of the drawing settings window ("style" | "coords") */
+  var drTab = "style";
+  var inGroup = (g) => (d2) => TOOL_MAP[d2.type]?.group === g;
   var DrawingUI = class {
     constructor(host, c, store) {
       this.host = host;
@@ -2311,26 +2432,24 @@
         }),
         this.btn("hideall", "eye", "Hide / show\u2026", () => {
           const b = this.btns.get("hideall").getBoundingClientRect(), st = this.hideState();
-          const dHide = st.d !== true, iHide = st.i !== true;
-          const allHide = st.d === false || st.i === false || (st.d === null && st.i === null);
+          const lHide = st.l !== true, tHide = st.t !== true, iHide = st.i !== true;
           this.menu(b.right + 4, b.top, [
-            [allHide ? "Hide all" : "Show all", () => {
-              this.setDrawingsHidden(allHide);
-              this.setIndicatorsHidden(allHide);
-            }],
-            [dHide ? "Hide drawings" : "Show drawings", () => this.setDrawingsHidden(dHide)],
+            [lHide ? "Hide lines" : "Show lines", () => this.setGroupHidden("lines", lHide)],
+            [tHide ? "Hide tools" : "Show tools", () => this.setGroupHidden("other", tHide)],
             [iHide ? "Hide indicators" : "Show indicators", () => this.setIndicatorsHidden(iHide)]
           ]);
         }),
         this.btn("clear", "trash", "Delete\u2026", () => {
           const b = this.btns.get("clear").getBoundingClientRect();
+          const drop = (pred) => () => {
+            store(this).clear(pred);
+            c.selection.clear();
+            c.hooks.changed?.();
+          };
           this.menu(b.right + 4, b.top, [
-            ["Delete All Drawings", () => {
-              store(this).clear();
-              c.selection.clear();
-              c.hooks.changed?.();
-            }],
-            ["Delete All Indicators", () => {
+            ["Delete Lines", drop(inGroup("lines"))],
+            ["Delete Tools", drop(inGroup("other"))],
+            ["Delete Indicators", () => {
               window.IND?.removeAll?.();
             }]
           ]);
@@ -2347,10 +2466,17 @@
         return u.store;
       }
     }
-    /* Hidden state per category: true = everything hidden, false = something visible, null = nothing to hide. */
+    /* Hidden state per category: true = everything hidden, false = something visible, null = nothing to hide.
+       l = lines, t = tools, d = all drawings (lines + tools), i = indicators. */
     hideState() {
       const items = this.store.items, ind = window.IND;
+      const of = (g) => {
+        const xs = items.filter(inGroup(g));
+        return xs.length ? xs.every((d2) => d2.hidden) : null;
+      };
       return {
+        l: of("lines"),
+        t: of("other"),
         d: items.length ? items.every((d2) => d2.hidden) : null,
         i: ind && ind.count && ind.count() ? ind.allHidden() : null
       };
@@ -2358,6 +2484,12 @@
     setDrawingsHidden(v) {
       this.store.setAll("hidden", v);
       if (v) this.c.selection.clear();
+      this.refresh();
+    }
+    /* Hide / show only the drawings of one toolbar tab ("lines" or "other" = Tools), independent of the other tab. */
+    setGroupHidden(g, v) {
+      this.store.setAll("hidden", v, inGroup(g));
+      if (v) for (const id of [...this.c.selection]) if (this.store.get(id)?.hidden) this.c.selection.delete(id);
       this.refresh();
     }
     setIndicatorsHidden(v) {
@@ -2390,7 +2522,7 @@
     /* ---------- refresh (toolbar state, floating bar, hint) ---------- */
     refresh() {
       const c = this.c, cur = c.tool ? TOOL_MAP[c.tool] : null;
-      if (cur) this.lastTool[cur.group] = cur.type;
+      if (cur && !c.hold) this.lastTool[cur.group] = cur.type;
       const on = (id, v) => this.btns.get(id)?.classList.toggle("on", v);
       on("cursor", !c.tool && c.mode === "cursor");
       for (const g of GROUPS) {
@@ -2405,7 +2537,7 @@
       const items = this.store.items;
       this.btns.get("lockall").innerHTML = icon(items.length && items.every((d2) => d2.locked) ? "lock" : "unlock");
       on("lockall", !!items.length && items.every((d2) => d2.locked));
-      const hs = this.hideState(), hAny = hs.d === true || hs.i === true, hAll = hAny && hs.d !== false && hs.i !== false;
+      const hs = this.hideState(), hAny = hs.d === true || hs.i === true || hs.l === true || hs.t === true, hAll = hAny && hs.d !== false && hs.i !== false;
       this.btns.get("hideall").innerHTML = icon(hAll ? "eyeoff" : "eye");
       on("hideall", hAny);
       this.btns.get("undo").disabled = !this.store.canUndo();
@@ -2542,9 +2674,9 @@
       const def = TOOL_MAP[d2.type], p = el("div", "dr-set");
       this.settings = p;
       this.settingsId = d2.id;
-      p.innerHTML = `<div class="dr-sh"><b>${esc2(def.label)}</b><button class="dr-x" data-dr-ui>\u2715</button></div><div class="dr-sb"></div>
+      p.innerHTML = `<div class="dr-sh"><b>${esc2(def.label)}</b><button class="dr-x" type="button" title="Close" aria-label="Close" data-dr-ui>\u2715</button></div><div class="dr-tabs" role="tablist" data-dr-ui></div><div class="dr-sb dr-sb-style"></div><div class="dr-sb dr-sb-coords" hidden></div>
       <div class="dr-sf"><button data-a="def" data-dr-ui>Save as default</button><button data-a="ok" class="pri" data-dr-ui>Done</button></div>`;
-      const body = p.querySelector(".dr-sb");
+      const body = p.querySelector(".dr-sb-style"), cbody = p.querySelector(".dr-sb-coords"), tabs = p.querySelector(".dr-tabs");
       this.store.begin();
       const rows = [];
       const live = () => {
@@ -2557,10 +2689,12 @@
         rows.push(r);
         body.appendChild(r);
       }
-      /* ---- coordinates: one aligned row per anchor point (price + date/time in the chart's time zone) ---- */
-      if (!def.hideCoords && d2.points.length) {
-        const pts2 = el("div", "dr-pts"), n = d2.points.length;
-        pts2.innerHTML = `<div class="dr-pt-h"><b>Coordinates</b></div><div class="dr-cr dr-cr-h"><span></span><span>Price</span><span>Date &amp; time (${esc2(TZNAME)})</span></div>`;
+      /* ---- Coordinates tab: one aligned row per anchor point (price + date/time in the chart's time zone) ---- */
+      const hasCoords = !def.hideCoords && d2.points.length, showTime = def.group !== "lines";
+      if (hasCoords) {
+        const pts2 = el("div", "dr-pts"), n = d2.points.length, dec = this.c.m.decimals();
+        pts2.innerHTML = `<div class="dr-cr dr-cr-h"><span></span><span>Price</span>${showTime ? "<span>Time</span>" : ""}</div>`;
+        if (!showTime) pts2.classList.add("no-time");
         const names = n === 2 ? ["Start", "End"] : n === 3 ? ["A", "B", "C"] : null;
         d2.points.forEach((a, i) => {
           const row = el("div", "dr-cr");
@@ -2568,7 +2702,7 @@
           const pr = el("input");
           pr.type = "number";
           pr.step = "any";
-          pr.value = String(a.price);
+          pr.value = fmtPrice(a.price, dec);
           pr.title = "Price";
           pr.onchange = () => {
             if (Number.isFinite(+pr.value) && pr.value !== "") {
@@ -2576,28 +2710,54 @@
               live();
             }
           };
-          const tm = el("input");
-          tm.type = "datetime-local";
-          tm.step = "1";
-          tm.title = "Time (" + TZNAME + ")";
-          tm.value = toWall(a.time);
-          tm.onchange = () => {
-            const t = fromWall(tm.value);
-            if (Number.isFinite(t)) {
-              d2.points[i].time = t;
-              live();
-            }
-          };
+          const tm = showTime ? el("input") : null;
+          if (tm) tm.type = "datetime-local";
+          if (tm) {
+            tm.step = "1";
+            tm.title = "Time (" + TZNAME + ")";
+            tm.value = toWall(a.time);
+            tm.onchange = () => {
+              const t = fromWall(tm.value);
+              if (Number.isFinite(t)) {
+                d2.points[i].time = t;
+                live();
+              }
+            };
+          }
           row.sync = () => {
-            if (document.activeElement !== pr) pr.value = String(d2.points[i].price);
-            if (document.activeElement !== tm) tm.value = toWall(d2.points[i].time);
+            if (document.activeElement !== pr) pr.value = fmtPrice(d2.points[i].price, dec);
+            if (tm && document.activeElement !== tm) tm.value = toWall(d2.points[i].time);
           };
           rows.push(row);
-          row.append(pr, tm);
+          tm ? row.append(pr, tm) : row.append(pr);
           pts2.appendChild(row);
         });
-        body.prepend(pts2);
+        cbody.appendChild(pts2);
       }
+      /* ---- tabs (Style / Coordinates), TradingView-style; a single pane needs no tab bar ---- */
+      const hasStyle = body.children.length > 0;
+      const showTab = (id) => {
+        if (!hasCoords || !hasStyle) id = hasCoords ? "coords" : "style";
+        drTab = id;
+        body.hidden = id !== "style";
+        cbody.hidden = id !== "coords";
+        tabs.querySelectorAll("button").forEach((x) => {
+          const on = x.dataset.tab === id;
+          x.classList.toggle("on", on);
+          x.setAttribute("aria-selected", String(on));
+        });
+      };
+      if (hasCoords && hasStyle) {
+        for (const [id, label] of [["style", "Style"], ["coords", "Coordinates"]]) {
+          const tb = el("button", "", label);
+          tb.type = "button";
+          tb.dataset.tab = id;
+          tb.setAttribute("role", "tab");
+          tb.onclick = () => showTab(id);
+          tabs.appendChild(tb);
+        }
+      } else tabs.hidden = true;
+      showTab(drTab);
       /* Draggable: grab the title bar (same behaviour as the indicator settings panel). */
       const head = p.querySelector(".dr-sh");
       head.setAttribute("data-dr-ui", "");

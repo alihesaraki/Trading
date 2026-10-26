@@ -137,13 +137,23 @@ button {
 }
 
 #tfs button,
+#btnType,
 #btnInd {
     flex: none;
 }
 
+#btnType {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    color: var(--tx);
+}
+
+#btnType[aria-expanded="true"] { background: var(--pn-hover); }
+
 #btnInd {
     min-width: max-content;
-    margin-left: auto;
 }
 
 #tfs button.on {
@@ -879,7 +889,7 @@ body.crs * {
 #imenu,
 #ctx,
 #pop,
-#bgset,
+#typemenu,
 #iset,
 .dr-fly,
 .dr-fb,
@@ -892,6 +902,7 @@ body.crs * {
 }
 
 #imenu,
+#typemenu,
 #ctx,
 .dr-fly,
 .dr-menu {
@@ -902,6 +913,7 @@ body.crs * {
 
 /* Shared menu item */
 #imenu button,
+#typemenu button,
 #ctx button,
 .dr-fly button,
 .dr-menu button {
@@ -918,6 +930,7 @@ body.crs * {
 }
 
 #imenu button:hover,
+#typemenu button:hover,
 #ctx button:hover,
 .dr-fly button:hover,
 .dr-menu button:hover {
@@ -977,97 +990,6 @@ body.crs * {
     font-style: normal;
 }
 
-/* Candle settings dialog */
-#pop,
-#bgset {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-width: 230px;
-    padding: var(--sp-3);
-    transform: translate(-50%, -50%);
-    max-width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
-    max-height: calc(100vh - 24px);
-    max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom));
-    overflow: auto;
-    overscroll-behavior: contain;
-}
-
-#pop label,
-#bgset label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-}
-
-#pop .ph,
-#bgset .ph {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-#pop .ph button,
-#bgset .ph button,
-.dr-x {
-    border: 0;
-    background: none;
-    color: var(--mu);
-    font-size: 14px;
-}
-
-#pop .ph button:hover,
-#bgset .ph button:hover,
-.dr-x:hover {
-    color: var(--tx);
-}
-
-#pop .candle-color-row,
-#bgset .candle-color-row {
-    gap: 10px;
-}
-
-#pop .candle-color-control,
-#bgset .candle-color-control {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-#bgBtns {
-    display: flex;
-    justify-content: flex-end;
-}
-
-#bgBtns button {
-    padding: 5px 10px;
-    border: 1px solid var(--bd-strong);
-    border-radius: var(--r-sm);
-    background: var(--pn-hover);
-}
-
-#bgBtns button:hover {
-    background: var(--bd-strong);
-}
-
-#pre {
-    display: flex;
-    gap: 6px;
-    margin-top: 2px;
-}
-
-#pre button {
-    width: 34px;
-    height: 22px;
-    border: 1px solid var(--bd-strong);
-    border-radius: var(--r-sm);
-}
-
 /* Indicator settings panel */
 #iset {
     position: absolute;
@@ -1085,7 +1007,7 @@ body.crs * {
     padding: 10px;
 }
 
-#iset > label {
+#iset .ipane > label {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 112px;
     align-items: center;
@@ -1095,8 +1017,8 @@ body.crs * {
     font-size: 11px;
 }
 
-#iset > label > input,
-#iset > label > select {
+#iset .ipane > label > input,
+#iset .ipane > label > select {
     justify-self: end;
 }
 
@@ -1126,6 +1048,34 @@ body.crs * {
     background: var(--bd-strong);
 }
 
+
+/* Indicator settings: Inputs / Style tabs (TradingView) */
+.itabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--bd);
+}
+
+.itabs button {
+    padding: 7px 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--mu);
+    font-weight: 500;
+}
+
+.itabs button:hover { color: var(--tx); }
+.itabs button.on { border-bottom-color: var(--acc); color: var(--tx); }
+
+.ipane {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.ipane[hidden] { display: none; }
 /* 7. Form controls --------------------------------------------------------- */
 #q,
 .sni,
@@ -1351,8 +1301,7 @@ input[type=color] {
     font: 12px ui-monospace, monospace;
 }
 
-#pop .candle-hex,
-#bgset .candle-hex {
+#pop .candle-hex {
     gap: 8px;
 }
 
@@ -1378,6 +1327,236 @@ input[type=color] {
     text-align: right;
 }
 
+/* 8b. Settings window (TradingView style: Symbol / Canvas tabs) and chart-type menu ---------- */
+#pop {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    width: min(560px, calc(100% - 24px));
+    max-width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
+    max-height: min(520px, calc(100% - 24px));
+    max-height: min(520px, calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom)));
+    padding: 0;
+    transform: translate(-50%, -50%);
+    overflow: auto;
+    overscroll-behavior: contain;
+    border-radius: 10px;
+    color-scheme: dark;
+}
+
+#pop[hidden] { display: none; }
+
+.st-head {
+    cursor: move;
+    user-select: none;
+    touch-action: none;
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 12px;
+    font-size: 16px;
+}
+
+.st-head button {
+    padding: 4px 6px;
+    border: 0;
+    background: none;
+    color: var(--mu);
+    font-size: 15px;
+}
+
+.st-head button:hover { color: var(--tx); }
+
+.st-main {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    border-top: 1px solid var(--bd);
+    border-bottom: 1px solid var(--bd);
+}
+
+.st-tabs {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 2px;
+    width: 150px;
+    padding: 8px;
+    border-right: 1px solid var(--bd);
+}
+
+.st-tabs button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: var(--r-md);
+    background: none;
+    color: var(--tx);
+    text-align: left;
+}
+
+.st-tabs button svg { flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; opacity: .75; }
+.st-tabs button svg .solid { fill: currentColor; }
+.st-tabs button:hover { background: var(--pn-hover); }
+.st-tabs button.on { background: var(--pn-hover); box-shadow: inset 3px 0 0 var(--acc); }
+.st-tabs button.on svg { opacity: 1; }
+
+.st-pane {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 220px;
+    padding: 6px 18px 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.st-sec {
+    margin: 14px 0 4px;
+    color: var(--mu);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .06em;
+}
+
+.st-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 36px;
+}
+
+.st-l { min-width: 0; }
+
+.st-c {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+
+.st-chk {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.st-chk input { width: 16px; height: 16px; margin: 0; accent-color: var(--acc); }
+
+.st-pane select {
+    min-width: 128px;
+    padding: 5px 8px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-sm);
+    background: var(--pn);
+    color: var(--tx);
+}
+
+.st-pane select:hover,
+.st-pane select:focus { border-color: var(--acc); outline: 0; }
+
+/* colour swatch button: checkerboard under the colour so opacity is visible */
+.st-sw {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    padding: 3px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-sm);
+    background: var(--pn);
+    cursor: pointer;
+}
+
+.st-sw:hover,
+.st-sw[aria-expanded=true] { border-color: var(--acc); }
+
+.st-sw i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+
+.st-note { margin: 16px 0 0; color: var(--mu); font-size: 12px; }
+
+.st-foot {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+}
+
+.st-foot button {
+    padding: 7px 18px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-md);
+    background: none;
+    color: var(--tx);
+}
+
+.st-foot button:hover { background: var(--pn-hover); }
+.st-foot button.pri { border-color: var(--acc); background: var(--acc); color: #fff; font-weight: 600; }
+.st-foot button.pri:hover { background: #1e53e5; }
+
+.st-pal {
+    position: absolute;
+    z-index: 5;
+    width: 192px;
+    padding: 10px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-lg);
+    background: var(--pn);
+    box-shadow: var(--shadow);
+}
+
+.st-pal[hidden] { display: none; }
+
+#pre { display: flex; gap: 8px; }
+#pre button { width: 40px; height: 24px; border: 1px solid var(--bd-strong); border-radius: var(--r-sm); }
+#pre button:hover { border-color: var(--acc); }
+
+/* Chart type menu */
+#typemenu {
+    position: absolute;
+    top: 42px;
+    left: var(--sp-2);
+    z-index: 20;
+    width: max-content;
+    min-width: 210px;
+    max-height: min(70vh, 520px);
+    max-height: min(70dvh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+#typemenu[hidden] { display: none; }
+#typemenu button span { flex: 1; }
+#typemenu button.on { color: #8eafff; }
+#typemenu button.on::after { content: "✓"; margin-left: 10px; }
+
+.ct-ico { flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.ct-ico .solid { fill: currentColor; }
+.ct-ico .soft { fill: currentColor; fill-opacity: .25; stroke: none; }
+
+@media (max-width: 560px) {
+    #pop { max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom)); }
+    .st-main { flex-direction: column; }
+    .st-tabs { flex-direction: row; width: auto; padding: 6px 8px; border-right: 0; border-bottom: 1px solid var(--bd); }
+    .st-tabs button { width: auto; flex: 1; justify-content: center; }
+    .st-tabs button.on { box-shadow: inset 0 -3px 0 var(--acc); }
+    .st-pane { padding: 4px 14px 12px; }
+    .st-row { min-height: 44px; }
+}
 /* 9. Drawing tools --------------------------------------------------------- */
 .dr-svg {
     position: absolute;
@@ -1576,6 +1755,53 @@ input[type=color] {
     flex-direction: column;
     width: 360px;
     max-height: calc(100% - 90px);
+    color-scheme: dark;
+}
+
+/* close (X): same muted, flat look as the Settings window; no bright default button background */
+.dr-x {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--mu);
+    font-size: 14px;
+    line-height: 1;
+}
+
+.dr-x:hover {
+    background: var(--pn-hover);
+    color: var(--tx);
+}
+
+/* Style / Coordinates tabs */
+.dr-tabs {
+    display: flex;
+    gap: var(--sp-1);
+    padding: 0 var(--sp-3);
+    border-bottom: 1px solid var(--bd);
+}
+
+.dr-tabs button {
+    margin-bottom: -1px;
+    padding: 8px 10px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--mu);
+}
+
+.dr-tabs button:hover {
+    color: var(--tx);
+}
+
+.dr-tabs button.on {
+    border-bottom-color: var(--acc);
+    color: var(--tx);
 }
 
 .dr-sh,
@@ -1672,8 +1898,7 @@ input[type=color] {
 
 /* coordinates table */
 .dr-pts {
-    padding-bottom: var(--sp-2);
-    border-bottom: 1px solid var(--bd);
+    padding-bottom: var(--sp-1);
 }
 
 .dr-pt-h {
@@ -1759,11 +1984,167 @@ input[type=color] {
         max-width: calc(100% - 140px);
     }
 
+    #btnType {
+        margin-left: 0;
+    }
+
     #btnInd {
         margin-left: 0;
     }
 }
 
+
+/* ---- Tool settings window: clean, evenly spaced layout ------------------- */
+.dr-set {
+    width: 348px;
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.dr-sh {
+    padding: 12px 8px 12px var(--sp-4);
+    border-bottom: 0;
+    font-size: 15px;
+}
+
+.dr-sh b {
+    font-weight: 600;
+}
+
+.dr-tabs {
+    padding: 0 var(--sp-4);
+    gap: var(--sp-4);
+}
+
+.dr-tabs button {
+    padding: 8px 2px;
+    font-weight: 500;
+}
+
+.dr-sb {
+    gap: 10px;
+    padding: var(--sp-4);
+}
+
+.dr-row {
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 8px var(--sp-3);
+    min-height: 30px;
+}
+
+.dr-row > span {
+    font-size: 12.5px;
+}
+
+.dr-row input[type=number],
+.dr-row input[type=text],
+.dr-row input[type=datetime-local],
+.dr-row select {
+    height: 30px;
+    padding: 0 8px;
+    font-size: 12.5px;
+}
+
+.dr-row textarea {
+    padding: 6px 8px;
+}
+
+.dr-row > input[type=checkbox] {
+    justify-self: start;
+    margin: 0;
+}
+
+.dr-color-control {
+    width: 100%;
+}
+
+.dr-color-control .icolor-toggle {
+    align-self: stretch;
+    height: 30px;
+    margin: 0;
+    padding: 0 8px;
+    background: var(--bg);
+    font-size: 12.5px;
+}
+
+.dr-row:has(.dr-color-control) > span {
+    padding-top: 6px;
+}
+
+.dr-color-panel .ipal {
+    width: 100%;
+}
+
+/* levels list (Fibonacci etc.): checkbox | value | colour */
+.dr-lv {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dr-lr {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 42px;
+    align-items: center;
+    gap: var(--sp-2);
+    margin: 0;
+}
+
+/* coordinates tab */
+.dr-pts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0;
+}
+
+.dr-cr {
+    grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: var(--sp-2);
+    margin: 0;
+}
+
+.dr-cr input {
+    height: 30px;
+    padding: 0 8px;
+}
+
+.dr-cr-h > span {
+    font-size: 10.5px;
+}
+
+/* footer */
+.dr-sf {
+    align-items: center;
+    padding: 10px var(--sp-4);
+}
+
+.dr-sf button {
+    height: 30px;
+    padding: 0 var(--sp-3);
+    font-size: 12.5px;
+}
+
+.dr-sf button[data-a=def] {
+    border-color: transparent;
+    background: transparent;
+    color: var(--mu);
+}
+
+.dr-sf button[data-a=def]:hover {
+    background: var(--pn-hover);
+    color: var(--tx);
+}
+
+.dr-sf .pri {
+    padding: 0 var(--sp-4);
+    font-weight: 600;
+}
+
+/* price-only coordinates (line tools) */
+.dr-pts.no-time .dr-cr {
+    grid-template-columns: 40px minmax(0, 1fr);
+}
 /* 10. Responsive ----------------------------------------------------------- */
 @media (hover: none) {
     .fl { opacity: .55; }
@@ -2117,6 +2498,12 @@ body.watchlist-hidden #side {
     }
     #btnTf[aria-expanded="true"] { background: var(--pn-hover); }
     #btnTf svg { opacity: .7; }
+    #bar #btnType {
+        min-width: 44px;
+        margin-left: 0;
+        padding: 0;
+    }
+    #bar #btnType .ct-ico { width: 24px; height: 24px; }
     #bar #btnInd {
         min-width: 44px;
         margin-left: 0;
@@ -2234,7 +2621,7 @@ body.watchlist-hidden #side {
     #imenu button { min-height: 44px; padding: 10px 14px; border-radius: 8px; font-size: 15px; }
     #iset { gap: 10px; max-height: min(78vh, 640px);
  max-height: min(78dvh, 640px); padding: 14px 16px calc(14px + var(--safe-bottom)); }
-    #iset > label { grid-template-columns: minmax(0, 1fr) 132px; gap: 10px; font-size: 14px; }
+    #iset .ipane > label { grid-template-columns: minmax(0, 1fr) 132px; gap: 10px; font-size: 14px; }
     body #iset input[type=number], body #iset select { width: 132px; max-width: 132px; min-height: 40px; font-size: 16px; }
     #iset > label > input, #iset > label > select { max-width: 132px; }
     .ih { cursor: default; font-size: 16px; }
@@ -2242,6 +2629,9 @@ body.watchlist-hidden #side {
     .dr-set { max-height: min(84vh, 680px) !important;
  max-height: min(84dvh, 680px) !important; }
     .dr-sh { padding: 14px 16px; }
+    .dr-tabs { padding: 0 16px; }
+    .dr-tabs button { min-height: 42px; }
+    .dr-x { width: 36px; height: 36px; }
     .dr-sb { padding: 10px 16px; }
     .dr-sf { padding: 12px 16px; }
     .dr-sf button { min-height: 42px; padding: 0 16px; }
@@ -2250,9 +2640,10 @@ body.watchlist-hidden #side {
     .dr-cr input, .ihex, #rpDate input, .sni { min-height: 40px; font-size: 16px; }
 
     /* Centered dialogs */
-    #pop, #bgset {
+    .st-head { cursor: default; }
+    #pop {
         z-index: 90;
-        width: min(340px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
+        width: min(400px, calc(100vw - 24px - var(--safe-left) - var(--safe-right)));
         min-width: 0;
         border-radius: 16px;
         box-shadow: var(--shadow), 0 0 0 100vmax rgba(0, 0, 0, .55);
@@ -2344,7 +2735,7 @@ body.watchlist-hidden #side {
     .row, #cols { gap: 6px; }
     .row .c { padding: 3px 5px; font-size: 12px; }
     .dr-row { grid-template-columns: 92px minmax(0, 1fr); }
-    #iset > label { grid-template-columns: minmax(0, 1fr) 112px; }
+    #iset .ipane > label { grid-template-columns: minmax(0, 1fr) 112px; }
     body #iset input[type=number], body #iset select { width: 112px; max-width: 112px; }
 }
 

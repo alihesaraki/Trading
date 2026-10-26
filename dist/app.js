@@ -102,10 +102,11 @@ let data = [], noMore = false, loadingOld = false, lastClose = null, lastUp = tr
 /* pend: live candle that arrived before history finished loading; curKey: sym|tf of the data on screen;
    ctl: AbortController of in-flight chart requests; cuBusy/cuT: catch-up lock and last run time */
 let pend = null, curKey = '', ctl = null, cuBusy = false, cuT = 0;
-const DEFAULT_CANDLE_COLORS = ['#26a69a', '#ef5350'];
+const DEFAULT_CANDLE_COLORS = ['#089981', '#F23645']; /* current TradingView default up / down colours */
 let savedCandleColors = store.get('cc', DEFAULT_CANDLE_COLORS);
 // Migrate the former built-in default, but preserve any custom colors saved by the user.
-if (Array.isArray(savedCandleColors) && savedCandleColors[0]?.toLowerCase() === '#0f9d7a' && savedCandleColors[1]?.toLowerCase() === '#f7e21f') {
+const isOldDefault = c => Array.isArray(c) && ((c[0]?.toLowerCase() === '#0f9d7a' && c[1]?.toLowerCase() === '#f7e21f') || (c[0]?.toLowerCase() === '#26a69a' && c[1]?.toLowerCase() === '#ef5350'));
+if (isOldDefault(savedCandleColors)) {
   savedCandleColors = DEFAULT_CANDLE_COLORS;
   store.set('cc', savedCandleColors);
 }
@@ -171,52 +172,388 @@ window.TVDR = { chart, series, bars: () => data, sym: () => sym, dec: () => map[
 const candle = k => ({ time: k[0] / 1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4], v: +k[5] });
 /* WebSocket kline object -> chart candle (T = close time, used for the countdown) */
 const bar = k => ({ time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c, v: +k.v, T: k.T });
-const applyPrec = d => series.applyOptions({ priceFormat: { type: 'price', precision: d, minMove: 1 / Math.pow(10, d) } });
-/* ---------- Candle colors ---------- */
-const PRE = [['#26a69a', '#ef5350'], ['#ffffff', '#d4af37'], ['#089981', '#ffeb3b']];
-let cUpOpacity = 100, cDnOpacity = 100;
-try { const savedOpacity = store.get('cco'); if (Array.isArray(savedOpacity)) { cUpOpacity = +savedOpacity[0] || 0; cDnOpacity = +savedOpacity[1] || 0; } } catch (_) {}
-for (const [key, panel] of [['up', 'cUpPanel'], ['dn', 'cDnPanel']]) {
-    $(panel).innerHTML = `${ColorPalette.html(c => `data-candle-color="${key}" data-color="${c}"`)}<label class="candle-hex">HEX <input type="text" id="${key === 'up' ? 'cUp' : 'cDn'}" class="ihex" value="${key === 'up' ? cUp : cDn}" maxlength="7" aria-label="${key} candle HEX"></label><div class="iopacity"><span>Opacity</span><input type="range" min="0" max="100" step="1" data-candle-opacity="${key}" value="${key === 'up' ? cUpOpacity : cDnOpacity}"><output data-candle-opacity-value="${key}">${key === 'up' ? cUpOpacity : cDnOpacity}%</output></div>`;
+/* chartAlts: helper series that draw the non-candle chart types (line, area, bars ...), see chart/chart-type.js */
+let chartAlts = [];
+const applyPrec = d => { const pf = { priceFormat: { type: 'price', precision: d, minMove: 1 / Math.pow(10, d) } }; series.applyOptions(pf); chartAlts.forEach(s => { try { s.applyOptions(pf); } catch (_) { } }); };
+/* ---------- Chart type (TradingView "Chart type" menu) ----------
+   The candlestick `series` always stays on the chart: drawings, the countdown, the price line, markers and every
+   coordinate helper depend on it. Candle-like types (Candles, Hollow, Heikin Ashi, High-low) only change the data and the
+   per-bar colours that are sent to it. Every other type (Bars, Line, Area, Baseline, Columns ...) hides the candles and draws
+   an extra helper series (chartAlts) from the same data. All writes go through setBars() / updateBar(). */
+const CLEAR = 'rgba(0,0,0,0)';
+const TYPE_ICONS = {
+    bars: '<path d="M6 3v14M6 6H3.5M6 13h2.5M14 2v13M14 5h-2.5M14 11h2.5"/>',
+    candles: '<path d="M6 2.5v3M6 14v3.5M14 4v2M14 15v2.5"/><rect x="4" y="5.5" width="4" height="8.5" rx=".6"/><rect x="12" y="6" width="4" height="9" rx=".6"/>',
+    hollow: '<path d="M6 2.5v3M6 14v3.5M14 4v2M14 15v2.5"/><rect x="4" y="5.5" width="4" height="8.5" rx=".6" fill="none"/><rect x="12" y="6" width="4" height="9" rx=".6" class="solid"/>',
+    line: '<path d="m2.5 14 4.5-5 3.5 3.5 6.5-8" fill="none"/>',
+    linemk: '<path d="m2.5 14 4.5-5 3.5 3.5 6.5-8" fill="none"/><circle cx="2.5" cy="14" r="1.4" class="solid"/><circle cx="7" cy="9" r="1.4" class="solid"/><circle cx="10.5" cy="12.5" r="1.4" class="solid"/><circle cx="17" cy="4.5" r="1.4" class="solid"/>',
+    step: '<path d="M2.5 14h4V9h4v4h3V5h3.5" fill="none"/>',
+    area: '<path d="m2.5 14 4.5-5 3.5 3.5 6.5-8V17h-14z" class="soft"/><path d="m2.5 14 4.5-5 3.5 3.5 6.5-8" fill="none"/>',
+    hlcarea: '<path d="m2.5 8 4.5-3 3.5 3 6.5-4M2.5 15l4.5-3 3.5 3 6.5-4" fill="none"/><path d="m2.5 11.5 4.5-3.5 3.5 3.5 6.5-5" fill="none" stroke-dasharray="2 1.6"/>',
+    baseline: '<path d="M2.5 10h15" stroke-dasharray="2 2" fill="none"/><path d="m2.5 14 4.5-5 3.5 4 6.5-8" fill="none"/>',
+    columns: '<path d="M4.5 17V9M8.5 17V5M12.5 17v-6M16.5 17V7" stroke-width="3" fill="none"/>',
+    hilo: '<rect x="3.5" y="4" width="3" height="11" rx=".6" class="solid"/><rect x="8.5" y="7" width="3" height="9" rx=".6" class="solid"/><rect x="13.5" y="3" width="3" height="10" rx=".6" class="solid"/>',
+    ha: '<path d="M6 2.5v2M6 15v2.5M14 4v1.5M14 15v2"/><rect x="4" y="4.5" width="4" height="10.5" rx=".6" class="solid"/><rect x="12" y="5.5" width="4" height="9.5" rx=".6" fill="none"/>'
+};
+const CHART_TYPES = [
+    ['bars', 'Bars'], ['candles', 'Candles'], ['hollow', 'Hollow candles'],
+    ['line', 'Line'], ['linemk', 'Line with markers'], ['step', 'Step line'],
+    ['area', 'Area'], ['hlcarea', 'HLC area'], ['baseline', 'Baseline'], ['columns', 'Columns'],
+    ['hilo', 'High-low'], ['ha', 'Heikin Ashi']
+];
+const CANDLE_BASED = new Set(['candles', 'hollow', 'hilo', 'ha']);
+const typeIcon = (id, size = 20) => `<svg class="ct-ico" viewBox="0 0 20 20" width="${size}" height="${size}" aria-hidden="true">${TYPE_ICONS[id] || TYPE_ICONS.candles}</svg>`;
+const typeName = id => (CHART_TYPES.find(t => t[0] === id) || CHART_TYPES[1])[1];
+
+let chartType = store.get('chartType', 'candles');
+if (!CHART_TYPES.some(t => t[0] === chartType)) chartType = 'candles';
+/* colour / thickness of the single-colour types (Line, Area, Baseline, High-low ...) */
+const LINE_DEFAULT = { color: '#2962FF', width: 2 };
+const lineCfg = Object.assign({}, LINE_DEFAULT, store.get('lineCfg', {}));
+
+let haArr = []; /* Heikin Ashi candles aligned with `data` */
+const haOf = (prev, b) => {
+    const close = (b.open + b.high + b.low + b.close) / 4, open = prev ? (prev.open + prev.close) / 2 : (b.open + b.close) / 2;
+    return { time: b.time, open, close, high: Math.max(b.high, open, close), low: Math.min(b.low, open, close) };
+};
+
+/* colour of one candle-like bar: each of body / border / wick has its own up and down colour (+ opacity, + on/off) */
+function barColors(b, prev) {
+    const cfg = window.candleCfg;
+    const up = cfg.prevClose && prev ? b.close >= prev.close : b.close >= b.open;
+    const pick = k => { const c = cfg[k]; return c.on ? rgbaC(up ? c.up : c.dn, up ? c.upO : c.dnO) : CLEAR; };
+    return { up, color: pick('body'), borderColor: pick('border'), wickColor: pick('wick') };
 }
-/* Pick black/white text that is readable on the given background color */
-function rgbaC(hex, opacity) { const n = parseInt(String(hex).slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${Math.max(0, Math.min(100, opacity)) / 100})`; }
-function setColors(u, d) {
-    cUp = u;
-    cDn = d;
-    const upHex = $('cUp'), dnHex = $('cDn'); if (upHex) upHex.value = u; if (dnHex) dnHex.value = d;
-    $('cUpSwatch').style.background = u;
-    $('cDnSwatch').style.background = d;
-    series.applyOptions({ upColor: rgbaC(u, cUpOpacity), borderUpColor: rgbaC(u, cUpOpacity), wickUpColor: rgbaC(u, cUpOpacity), downColor: rgbaC(d, cDnOpacity), borderDownColor: rgbaC(d, cDnOpacity), wickDownColor: rgbaC(d, cDnOpacity) });
-    cdCol = '';
-    header();
-    store.set('cc', [u, d]); store.set('cco', [cUpOpacity, cDnOpacity]);
+function candlePoint(b, prev, i) {
+    if (!CANDLE_BASED.has(chartType)) return { time: b.time, open: b.open, high: b.high, low: b.low, close: b.close, color: CLEAR, borderColor: CLEAR, wickColor: CLEAR };
+    if (chartType === 'hilo') {
+        const c = rgbaC(lineCfg.color, 100);
+        return { time: b.time, open: b.low, high: b.high, low: b.low, close: b.high, color: c, borderColor: c, wickColor: c };
+    }
+    if (chartType === 'ha') {
+        const h = haArr[i] || haOf(null, b), k = barColors(h, haArr[i - 1]);
+        return { time: b.time, open: h.open, high: h.high, low: h.low, close: h.close, color: k.color, borderColor: k.borderColor, wickColor: k.wickColor };
+    }
+    const k = barColors(b, prev);
+    if (chartType === 'hollow') {
+        /* hollow = rising bars are empty, falling bars are filled; the outline follows the previous close */
+        const filled = b.close < b.open, cfg = window.candleCfg, o = barColors(Object.assign({}, b, { open: prev ? prev.close : b.open }), null);
+        return { time: b.time, open: b.open, high: b.high, low: b.low, close: b.close, color: filled ? (cfg.body.on ? rgbaC(cfg.body.dn, cfg.body.dnO) : CLEAR) : CLEAR, borderColor: o.borderColor, wickColor: o.wickColor };
+    }
+    return { time: b.time, open: b.open, high: b.high, low: b.low, close: b.close, color: k.color, borderColor: k.borderColor, wickColor: k.wickColor };
+}
+/* points for the helper series of the non-candle types, in the same order as chartAlts */
+function altPoints(b, prev) {
+    const up = b.close >= (prev ? prev.close : b.open), cu = rgbaC(cUp, 100), cd = rgbaC(cDn, 100);
+    switch (chartType) {
+        case 'bars': return [{ time: b.time, open: b.open, high: b.high, low: b.low, close: b.close }];
+        case 'columns': return [{ time: b.time, value: b.close, color: up ? rgbaC(cUp, cUpOpacity) : rgbaC(cDn, cDnOpacity) }];
+        case 'hlcarea': return [{ time: b.time, value: b.close }, { time: b.time, value: b.high }, { time: b.time, value: b.low }];
+        case 'line': case 'linemk': case 'step': case 'area': case 'baseline': return [{ time: b.time, value: b.close }];
+    }
+    return [];
+}
+function buildAlts() {
+    chartAlts.forEach(s => { try { chart.removeSeries(s); } catch (_) { } });
+    chartAlts = [];
+    const pf = series.options().priceFormat, c = lineCfg.color, w = lineCfg.width, LT = LightweightCharts.LineType || {};
+    const base = { priceFormat: pf, priceLineVisible: false, lastValueVisible: false };
+    const line = (o) => chart.addLineSeries(Object.assign({ crosshairMarkerVisible: true }, base, o));
+    switch (chartType) {
+        case 'bars': chartAlts = [chart.addBarSeries(Object.assign({ upColor: rgbaC(cUp, cUpOpacity), downColor: rgbaC(cDn, cDnOpacity), thinBars: false }, base))]; break;
+        case 'line': chartAlts = [line({ color: c, lineWidth: w })]; break;
+        case 'linemk': chartAlts = [line({ color: c, lineWidth: w, pointMarkersVisible: true })]; break;
+        case 'step': chartAlts = [line({ color: c, lineWidth: w, lineType: LT.WithSteps ?? 1 })]; break;
+        case 'area': chartAlts = [chart.addAreaSeries(Object.assign({ lineColor: c, lineWidth: w, topColor: rgbaC(c, 28), bottomColor: rgbaC(c, 0), crosshairMarkerVisible: true }, base))]; break;
+        case 'hlcarea': chartAlts = [
+            chart.addAreaSeries(Object.assign({ lineColor: c, lineWidth: w, topColor: rgbaC(c, 18), bottomColor: rgbaC(c, 0), crosshairMarkerVisible: false }, base)),
+            line({ color: rgbaC(cUp, 100), lineWidth: 1, crosshairMarkerVisible: false }), line({ color: rgbaC(cDn, 100), lineWidth: 1, crosshairMarkerVisible: false })]; break;
+        case 'baseline': chartAlts = [chart.addBaselineSeries(Object.assign({
+            baseValue: { type: 'price', price: baselineMid() }, lineWidth: w,
+            topLineColor: rgbaC(cUp, 100), bottomLineColor: rgbaC(cDn, 100),
+            topFillColor1: rgbaC(cUp, 28), topFillColor2: rgbaC(cUp, 5), bottomFillColor1: rgbaC(cDn, 5), bottomFillColor2: rgbaC(cDn, 28)
+        }, base))]; break;
+        case 'columns': chartAlts = [chart.addHistogramSeries(Object.assign({}, base, {
+            priceFormat: pf,
+            /* columns start at the bottom of the pane; scale to the visible closes so the price axis is not stretched down to 0 */
+            autoscaleInfoProvider: () => {
+                const r = chart.timeScale().getVisibleLogicalRange(); let lo = Infinity, hi = -Infinity;
+                for (let i = Math.max(0, Math.floor(r ? r.from : 0)); i <= Math.min(data.length - 1, Math.ceil(r ? r.to : data.length)); i++) { const v = data[i].close; if (v < lo) lo = v; if (v > hi) hi = v; }
+                if (!(hi >= lo)) return null;
+                const pad = (hi - lo) * 0.1 || hi * 0.01;
+                return { priceRange: { minValue: Math.max(0, lo - pad * 4), maxValue: hi + pad } };
+            }
+        }))]; break;
+    }
+    /* the candles stay on the chart (price line, drawings, markers) but are invisible and do not take part in auto-scaling */
+    series.applyOptions({ autoscaleInfoProvider: CANDLE_BASED.has(chartType) ? base0 => base0() : () => null });
+}
+function baselineMid() {
+    const tail = data.slice(-200); if (!tail.length) return 0;
+    let lo = Infinity, hi = -Infinity; for (const b of tail) { if (b.close < lo) lo = b.close; if (b.close > hi) hi = b.close; }
+    return (lo + hi) / 2;
+}
+function setBars(d) {
+    if (chartType === 'ha') { haArr = []; for (let i = 0; i < d.length; i++) haArr.push(haOf(haArr[i - 1], d[i])); } else haArr = [];
+    series.setData(d.map((b, i) => candlePoint(b, d[i - 1], i)));
+    if (!chartAlts.length) return;
+    if (chartType === 'baseline') chartAlts[0].applyOptions({ baseValue: { type: 'price', price: baselineMid() } });
+    const cols = chartAlts.map(() => []);
+    d.forEach((b, i) => altPoints(b, d[i - 1]).forEach((pt, k) => cols[k] && cols[k].push(pt)));
+    chartAlts.forEach((s, k) => s.setData(cols[k]));
+}
+function updateBar(b) {
+    const n = data.length, i = n - 1;
+    if (!n || data[i].time !== b.time) return setBars(data);
+    const prev = data[i - 1];
+    if (chartType === 'ha') {
+        if (haArr.length !== n && haArr.length !== n - 1) return setBars(data);
+        haArr[i] = haOf(haArr[i - 1], b);
+    }
+    series.update(candlePoint(b, prev, i));
+    altPoints(b, prev).forEach((pt, k) => chartAlts[k] && chartAlts[k].update(pt));
+}
+/* rebuild after a colour / type change */
+function restyleChart() {
+    buildAlts();
+    setBars(data);
     window.IND && IND.colors();
 }
-$('pre').innerHTML = PRE.map((p, i) => `<button data-i="${i}" style="background:linear-gradient(90deg,${p[0]} 50%,${p[1]} 50%)"></button>`).join('');
-$('pre').onclick = e => {
-    const i = e.target.dataset.i;
-    if (i != null)
-        setColors(...PRE[i]);
+function setChartType(id) {
+    if (!CHART_TYPES.some(t => t[0] === id)) return;
+    chartType = id;
+    store.set('chartType', id);
+    restyleChart();
+    syncTypeUi();
+    window.dispatchEvent(new Event('charttypechange'));
+}
+
+/* ---------- Toolbar button + menu (next to Indicators) ---------- */
+const btnType = $('btnType'), typeMenu = $('typemenu');
+function syncTypeUi() {
+    btnType.innerHTML = typeIcon(chartType, 20);
+    btnType.title = 'Chart type: ' + typeName(chartType);
+    btnType.setAttribute('aria-label', 'Chart type: ' + typeName(chartType));
+    typeMenu.innerHTML = CHART_TYPES.map(([id, name]) => `<button type="button" role="menuitemradio" data-type="${id}" aria-checked="${id === chartType}" class="${id === chartType ? 'on' : ''}">${typeIcon(id, 20)}<span>${name}</span></button>`).join('');
+}
+function closeTypeMenu() { typeMenu.hidden = true; btnType.setAttribute('aria-expanded', 'false'); }
+function positionTypeMenu() {
+    const main = $('main'), b = btnType.getBoundingClientRect(), m = main.getBoundingClientRect(), w = typeMenu.offsetWidth || 200, h = typeMenu.offsetHeight || 300;
+    const left = Math.max(8, Math.min(b.left - m.left, main.clientWidth - w - 8));
+    const below = b.bottom - m.top + 3;
+    typeMenu.style.left = left + 'px';
+    typeMenu.style.top = (below + h <= main.clientHeight - 8 ? below : Math.max(8, b.top - m.top - h - 3)) + 'px';
+}
+btnType.onclick = e => {
+    e.stopPropagation();
+    if (!typeMenu.hidden) return closeTypeMenu();
+    $('imenu').hidden = true; $('btnInd').setAttribute('aria-expanded', 'false'); $('pop').hidden = true;
+    typeMenu.hidden = false; positionTypeMenu();
+    btnType.setAttribute('aria-expanded', 'true');
 };
-document.querySelector('#pop').addEventListener('input', e => { const key = e.target.dataset.candleOpacity; if (key) { const v = Math.max(0, Math.min(100, +e.target.value)); if (key === 'up') cUpOpacity = v; else cDnOpacity = v; const out = document.querySelector(`[data-candle-opacity-value="${key}"]`); if (out) out.textContent = v + '%'; setColors(cUp, cDn); return; } if (e.target.id === 'cUp' || e.target.id === 'cDn') { const value = e.target.value; if (/^#[0-9a-f]{6}$/i.test(value)) e.target.id === 'cUp' ? setColors(value, cDn) : setColors(cUp, value); } });
-document.querySelector('#pop').addEventListener('click', e => {
-    const toggle = e.target.closest('[data-candle-toggle]');
-    if (toggle) {
-        const key = toggle.dataset.candleToggle, panel = $(key === 'up' ? 'cUpPanel' : 'cDnPanel'), wasOpen = !panel.hidden;
-        $('cUpPanel').hidden = true; $('cDnPanel').hidden = true; document.querySelectorAll('[data-candle-toggle]').forEach(b => b.setAttribute('aria-expanded', 'false')); panel.hidden = wasOpen; toggle.setAttribute('aria-expanded', String(!wasOpen));
+typeMenu.onclick = e => { const b = e.target.closest('button[data-type]'); if (!b) return; closeTypeMenu(); setChartType(b.dataset.type); };
+document.addEventListener('pointerdown', e => { if (!typeMenu.hidden && !typeMenu.contains(e.target) && !btnType.contains(e.target)) closeTypeMenu(); });
+addEventListener('keydown', e => { if (e.key === 'Escape') closeTypeMenu(); });
+addEventListener('resize', () => { if (!typeMenu.hidden) positionTypeMenu(); });
+syncTypeUi();
+/* the helper series are created by applyCandleCfg() -> restyleChart() at startup (needs the candle colour settings) */
+/* ---------- Settings dialog (TradingView "Settings": Symbol + Canvas tabs in ONE window) ----------
+   This file owns the dialog shell, the Symbol tab (candle body / borders / wick colours) and the colour popover.
+   The Canvas tab (background, grid, crosshair) is rendered by chart/background.js into the same window. */
+const PRE = [['#089981', '#F23645'], ['#26a69a', '#ef5350'], ['#ffffff', '#d4af37'], ['#089981', '#ffeb3b']];
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+const CANDLE_DEFAULT = {
+    prevClose: false,
+    body: { on: true, up: DEFAULT_CANDLE_COLORS[0], dn: DEFAULT_CANDLE_COLORS[1], upO: 100, dnO: 100 },
+    border: { on: true, up: DEFAULT_CANDLE_COLORS[0], dn: DEFAULT_CANDLE_COLORS[1], upO: 100, dnO: 100 },
+    wick: { on: true, up: DEFAULT_CANDLE_COLORS[0], dn: DEFAULT_CANDLE_COLORS[1], upO: 100, dnO: 100 }
+};
+const clampOp = v => Math.max(0, Math.min(100, Number.isFinite(+v) ? +v : 100));
+function loadCandleCfg() {
+    const cfg = JSON.parse(JSON.stringify(CANDLE_DEFAULT)), saved = store.get('cs');
+    if (saved && typeof saved === 'object') {
+        for (const g of ['body', 'border', 'wick']) {
+            const s = saved[g] || {};
+            cfg[g].on = s.on !== false;
+            if (HEX_RE.test(s.up)) cfg[g].up = s.up;
+            if (HEX_RE.test(s.dn)) cfg[g].dn = s.dn;
+            cfg[g].upO = clampOp(s.upO); cfg[g].dnO = clampOp(s.dnO);
+        }
+        cfg.prevClose = !!saved.prevClose;
+    } else { /* settings saved by the previous version: one up / down colour + opacity for the whole candle */
+        const cc = store.get('cc'), co = store.get('cco');
+        for (const g of ['body', 'border', 'wick']) {
+            if (Array.isArray(cc) && HEX_RE.test(cc[0]) && HEX_RE.test(cc[1])) { cfg[g].up = cc[0]; cfg[g].dn = cc[1]; }
+            if (Array.isArray(co)) { cfg[g].upO = clampOp(co[0]); cfg[g].dnO = clampOp(co[1]); }
+        }
+    }
+    return cfg;
+}
+const candleCfg = window.candleCfg = loadCandleCfg();
+let cUpOpacity = candleCfg.body.upO, cDnOpacity = candleCfg.body.dnO;
+cUp = candleCfg.body.up; cDn = candleCfg.body.dn;
+
+/* colour + opacity (0-100) -> rgba() string */
+function rgbaC(hex, opacity) { const n = parseInt(String(hex).slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${clampOp(opacity) / 100})`; }
+/* Push the candle settings to the chart, header, volume, countdown ... and persist them */
+function applyCandleCfg(save = true) {
+    const b = candleCfg.body;
+    cUp = b.up; cDn = b.dn; cUpOpacity = b.upO; cDnOpacity = b.dnO;
+    cdCol = '';
+    header();
+    if (save) { store.set('cs', candleCfg); store.set('cc', [cUp, cDn]); store.set('cco', [cUpOpacity, cDnOpacity]); }
+    restyleChart();
+}
+/* one up / down pair for body, borders and wick together (presets) */
+function setColors(u, d) {
+    for (const g of ['body', 'border', 'wick']) { candleCfg[g].up = u; candleCfg[g].dn = d; }
+    applyCandleCfg();
+}
+
+/* ---------- Dialog shell ---------- */
+const pop = $('pop');
+pop.innerHTML = `
+    <div class="st-head"><b>Settings</b><button type="button" id="popX" title="Close" aria-label="Close settings">✕</button></div>
+    <div class="st-main">
+        <div class="st-tabs" role="tablist" aria-label="Settings sections">
+            <button type="button" role="tab" data-st-tab="symbol"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">${TYPE_ICONS.candles}</svg><span>Symbol</span></button>
+            <button type="button" role="tab" data-st-tab="canvas"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 3h14v14H3zM3 8h14M3 13h14M8 3v14M13 3v14"/></svg><span>Canvas</span></button>
+        </div>
+        <div class="st-pane" id="stPane"></div>
+    </div>
+    <div class="st-foot"><button type="button" id="stReset">Reset settings</button><button type="button" id="stOk" class="pri">Ok</button></div>
+    <div class="st-pal" id="stPal" hidden></div>`;
+let stTab = store.get('stTab', 'symbol') === 'canvas' ? 'canvas' : 'symbol';
+
+/* ---------- Colour popover (palette + HEX + opacity) shared by every colour swatch in the dialog ---------- */
+const PAL = {};
+for (const g of ['body', 'border', 'wick']) for (const k of ['up', 'dn']) {
+    PAL[g + '.' + k] = { hex: () => candleCfg[g][k], op: () => candleCfg[g][k + 'O'], set: (v, o) => { candleCfg[g][k] = v; if (o != null) candleCfg[g][k + 'O'] = o; }, commit: () => applyCandleCfg() };
+}
+PAL.line = { hex: () => lineCfg.color, op: null, set: v => { lineCfg.color = v; }, commit: () => { store.set('lineCfg', lineCfg); restyleChart(); } };
+const swatch = key => {
+    const t = PAL[key], op = t.op ? t.op() : 100;
+    return `<button type="button" class="st-sw" data-pal="${key}" aria-expanded="false" aria-label="Color"><i style="background:${rgbaC(t.hex(), op)}"></i></button>`;
+};
+let palKey = null;
+function closePal() { $('stPal').hidden = true; palKey = null; pop.querySelectorAll('[data-pal]').forEach(b => b.setAttribute('aria-expanded', 'false')); }
+function openPal(btn) {
+    const key = btn.dataset.pal, t = PAL[key];
+    if (!t) return;
+    if (palKey === key) return closePal();
+    closePal();
+    palKey = key;
+    const hasOp = !!t.op, op = hasOp ? t.op() : 100, pal = $('stPal');
+    pal.innerHTML = `${ColorPalette.html(c => `data-pal-color="${c}"`)}<div class="candle-hex"><label>HEX <input type="text" class="ihex" id="stHex" value="${t.hex()}" maxlength="7" aria-label="HEX color"></label></div>${hasOp ? `<div class="iopacity"><span>Opacity</span><input type="range" id="stOp" min="0" max="100" step="1" value="${op}"><output id="stOpOut">${op}%</output></div>` : ''}`;
+    pal.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    const pr = pop.getBoundingClientRect(), br = btn.getBoundingClientRect();
+    const w = pal.offsetWidth, h = pal.offsetHeight;
+    let left = br.right - pr.left - w, top = br.bottom - pr.top + 6;
+    if (left < 8) left = 8;
+    if (left + w > pr.width - 8) left = Math.max(8, pr.width - w - 8);
+    if (top + h > pr.height - 8) top = Math.max(8, br.top - pr.top - h - 6);
+    pal.style.left = left + 'px'; pal.style.top = top + 'px';
+}
+function palCommit(hex, op) {
+    const t = PAL[palKey];
+    if (!t) return;
+    t.set(hex, op);
+    t.commit();
+    const btn = pop.querySelector(`[data-pal="${palKey}"] i`);
+    if (btn) btn.style.background = rgbaC(t.hex(), t.op ? t.op() : 100);
+}
+pop.addEventListener('input', e => {
+    const t = e.target;
+    if (t.id === 'stHex') { if (HEX_RE.test(t.value)) palCommit(t.value, null); return; }
+    if (t.id === 'stOp') { const v = clampOp(t.value); $('stOpOut').textContent = v + '%'; palCommit(PAL[palKey].hex(), v); return; }
+    if (t.dataset.stCandle) { /* checkboxes: Body / Borders / Wick / previous-close colouring */
+        if (t.dataset.stCandle === 'prevClose') candleCfg.prevClose = t.checked; else candleCfg[t.dataset.stCandle].on = t.checked;
+        applyCandleCfg();
         return;
     }
-    const swatch = e.target.closest('[data-candle-color]');
-    if (swatch) {
-        if (swatch.dataset.candleColor === 'up') setColors(swatch.dataset.color, cDn); else setColors(cUp, swatch.dataset.color);
-        $('cUpPanel').hidden = true; $('cDnPanel').hidden = true; document.querySelectorAll('[data-candle-toggle]').forEach(b => b.setAttribute('aria-expanded', 'false'));
-    }
+    if (t.dataset.stLine === 'width') { lineCfg.width = clamp(+t.value || 2, 1, 4); store.set('lineCfg', lineCfg); restyleChart(); return; }
+    if (typeof canvasInput === 'function' && canvasInput(t)) return;
 });
-$('popX').onclick = () => { $('pop').hidden = true; };
-/* Candle Settings window: opened by double-click or right-click on a candle */
-function openCandleSet() { $('imenu').hidden = true;
-    $('btnInd').setAttribute('aria-expanded', 'false'); const bg = document.getElementById('bgset'); if (bg) bg.hidden = true; $('pop').hidden = false; }
+pop.addEventListener('click', e => {
+    const tab = e.target.closest('[data-st-tab]');
+    if (tab) { stTab = tab.dataset.stTab; store.set('stTab', stTab); renderSettings(); return; }
+    const sw = e.target.closest('[data-pal]');
+    if (sw) { openPal(sw); return; }
+    const pc = e.target.closest('[data-pal-color]');
+    if (pc) { palCommit(pc.dataset.palColor, null); closePal(); return; }
+    const pre = e.target.closest('[data-pre]');
+    if (pre) { setColors(...PRE[+pre.dataset.pre]); renderSettings(); return; }
+    if (e.target.closest('#stOk') || e.target.closest('#popX')) { pop.hidden = true; closePal(); return; }
+    if (e.target.closest('#stReset')) {
+        if (stTab === 'symbol') { Object.assign(lineCfg, LINE_DEFAULT); store.set('lineCfg', lineCfg); const d = JSON.parse(JSON.stringify(CANDLE_DEFAULT)); for (const k of Object.keys(d)) candleCfg[k] = d[k]; applyCandleCfg(); }
+        else if (typeof resetCanvas === 'function') resetCanvas();
+        renderSettings();
+        return;
+    }
+    if (palKey && !e.target.closest('#stPal')) closePal();
+});
+
+/* ---------- Symbol tab ---------- */
+const typeKind = () => CANDLE_BASED.has(chartType) && chartType !== 'hilo' ? 'candle' : ['bars', 'columns', 'baseline'].includes(chartType) ? 'updn' : 'line';
+function renderSymbol() {
+    const kind = typeKind(), row = (label, ctl) => `<div class="st-row"><span class="st-l">${label}</span><span class="st-c">${ctl}</span></div>`;
+    const grp = (g, label) => row(`<label class="st-chk"><input type="checkbox" data-st-candle="${g}" ${candleCfg[g].on ? 'checked' : ''}><span>${label}</span></label>`, swatch(g + '.up') + swatch(g + '.dn'));
+    let h = `<div class="st-sec">${typeName(chartType).toUpperCase()}</div>`;
+    if (kind === 'candle') {
+        h += row(`<label class="st-chk"><input type="checkbox" data-st-candle="prevClose" ${candleCfg.prevClose ? 'checked' : ''}><span>Color bars based on previous close</span></label>`, '');
+        h += grp('body', 'Body') + grp('border', 'Borders') + grp('wick', 'Wick');
+    } else if (kind === 'updn') {
+        h += row('Up color', swatch('body.up')) + row('Down color', swatch('body.dn'));
+    } else {
+        h += row('Color', swatch('line'));
+        if (chartType !== 'hilo') h += row('Line thickness', `<select data-st-line="width">${[1, 2, 3, 4].map(w => `<option value="${w}"${w === lineCfg.width ? ' selected' : ''}>${w}px</option>`).join('')}</select>`);
+        if (chartType === 'hlcarea') h += row('High / Low lines', swatch('body.up') + swatch('body.dn'));
+    }
+    h += `<div class="st-sec">PRESETS</div><div class="st-row"><div id="pre">${PRE.map((p, i) => `<button type="button" data-pre="${i}" title="${p[0]} / ${p[1]}" style="background:linear-gradient(90deg,${p[0]} 50%,${p[1]} 50%)"></button>`).join('')}</div></div>`;
+    h += `<p class="st-note">Chart type is changed from the button next to Indicators.</p>`;
+    return h;
+}
+function renderSettings() {
+    closePal();
+    pop.querySelectorAll('[data-st-tab]').forEach(b => { const on = b.dataset.stTab === stTab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    $('stPane').innerHTML = stTab === 'canvas' && typeof renderCanvas === 'function' ? renderCanvas() : renderSymbol();
+}
+function openSettings(tab) {
+    pop.style.left = pop.style.top = pop.style.transform = ''; /* re-centre every time it opens */
+    if (tab) { stTab = tab; store.set('stTab', tab); }
+    $('imenu').hidden = true;
+    $('btnInd').setAttribute('aria-expanded', 'false');
+    if (typeof closeTypeMenu === 'function') closeTypeMenu();
+    renderSettings();
+    pop.hidden = false;
+}
+/* Movable window: drag the title bar (desktop only; phones show it as a fixed centred dialog). */
+(() => {
+    const head = pop.querySelector('.st-head'), phone = matchMedia('(max-width: 820px), (pointer: coarse) and (max-height: 500px)');
+    let drag = null;
+    head.addEventListener('pointerdown', e => {
+        if (phone.matches || e.button > 0 || e.target.closest('button')) return;
+        const box = pop.getBoundingClientRect(), par = (pop.offsetParent || document.body).getBoundingClientRect();
+        drag = { x: e.clientX, y: e.clientY, left: box.left - par.left, top: box.top - par.top, w: box.width, h: Math.min(box.height, par.height), pw: par.width, ph: par.height };
+        pop.style.transform = 'none';
+        pop.style.left = drag.left + 'px'; pop.style.top = drag.top + 'px';
+        head.setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+    });
+    head.addEventListener('pointermove', e => {
+        if (!drag) return;
+        pop.style.left = Math.max(0, Math.min(drag.pw - drag.w, drag.left + e.clientX - drag.x)) + 'px';
+        pop.style.top = Math.max(0, Math.min(drag.ph - drag.h, drag.top + e.clientY - drag.y)) + 'px';
+    });
+    const end = () => { drag = null; };
+    head.addEventListener('pointerup', end);
+    head.addEventListener('pointercancel', end);
+})();
+const openCandleSet = () => openSettings('symbol');
+const openBgSet = () => openSettings('canvas');
+window.addEventListener('charttypechange', () => { if (!pop.hidden && stTab === 'symbol') renderSettings(); });
+
 function candleAt(e) {
     if (e.target.closest('#lg,#iset,#pop,#tl,.dr-tb,.dr-fly,.dr-fb,.dr-set,.dr-ta,.dr-svg,[data-dr-ui]'))
         return null;
@@ -234,8 +571,17 @@ function candleAt(e) {
         return null;
     return y >= hi - 4 && y <= lo + 4 ? data[i] : null;
 }
+/* Desktop: double-click a candle -> Symbol tab, double-click empty chart area -> Canvas tab (both live in the same window) */
+function plotPoint(e) {
+    if (e.target.closest('#lg,#iset,#pop,#tl,#scaleModes,#jumpNow,.dr-tb,.dr-fly,.dr-fb,.dr-set,.dr-ta,.dr-svg,[data-dr-ui],#rpBar,.chl'))
+        return false;
+    if (!e.target.closest('#chart')) return false;
+    const r = $('chart').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    return !(x < 0 || y < 0 || x >= r.width - chart.priceScale('right').width() || y >= r.height - chart.timeScale().height());
+}
 $('cw').addEventListener('dblclick', e => {
     if (candleAt(e)) openCandleSet();
+    else if (plotPoint(e)) openBgSet();
 });
 // Touch screens often omit dblclick, so treat two quick taps on a candle as a double-click.
 let lastCandleTap = null;
@@ -249,16 +595,18 @@ $('cw').addEventListener('pointerup', e => {
         openCandleSet();
     } else lastCandleTap = { time: now, x: e.clientX, y: e.clientY };
 }, true);
-document.addEventListener('click', e => {
-    if (!$('pop').contains(e.target))
-        $('pop').hidden = true;
+/* close on outside press (pointerdown: the clicked control may be re-rendered before a click event arrives) */
+document.addEventListener('pointerdown', e => {
+    if (!pop.hidden && !pop.contains(e.target)) { pop.hidden = true; closePal(); }
 });
 addEventListener('keydown', e => {
-    if (e.key === 'Escape')
-        $('pop').hidden = true;
+    if (e.key === 'Escape' && !pop.hidden) { if (palKey) closePal(); else pop.hidden = true; }
 });
-/* ---------- Chart background settings (right-click on chart -> Background Settings) ---------- */
-const BG_DEFAULT = { bg: '#09101c', grid: '#2a2e39', gridOp: 25 };
+/* ---------- Canvas tab of the Settings window: background, grid lines, crosshair ----------
+   The window itself (and the Symbol tab) lives in candle-colors.js; this file renders / applies the Canvas tab. */
+const BG_DEFAULT = { bg: '#09101c', grid: '#2a2e39', gridOp: 25, gridMode: 'Vert and horz', cross: '#5d606b', crossStyle: 'Dashed' };
+const GRID_MODES = ['Vert and horz', 'Vert only', 'Horz only', 'None'];
+const LINE_STYLES = { Solid: 0, Dotted: 1, Dashed: 2, 'Large dashed': 3 };
 const bgCfg = Object.assign({}, BG_DEFAULT);
 try {
     const saved = store.get('bg');
@@ -266,96 +614,56 @@ try {
         if (/^#[0-9a-f]{6}$/i.test(saved.bg)) bgCfg.bg = saved.bg.toLowerCase() === '#131722' ? BG_DEFAULT.bg : saved.bg;
         if (/^#[0-9a-f]{6}$/i.test(saved.grid)) bgCfg.grid = saved.grid;
         if (Number.isFinite(+saved.gridOp)) bgCfg.gridOp = Math.max(0, Math.min(100, +saved.gridOp));
+        if (GRID_MODES.includes(saved.gridMode)) bgCfg.gridMode = saved.gridMode;
+        if (/^#[0-9a-f]{6}$/i.test(saved.cross)) bgCfg.cross = saved.cross;
+        if (saved.crossStyle in LINE_STYLES) bgCfg.crossStyle = saved.crossStyle;
     }
 } catch (_) { }
-const BG_KEYS = { bg: ['bgSwatch', 'bgPanel', 'bgHex'], grid: ['gridSwatch', 'gridPanel', 'gridHex'] };
-const bgPop = document.createElement('div');
-bgPop.id = 'bgset';
-bgPop.hidden = true;
-bgPop.innerHTML = `
-    <div class="ph"><b>Background Settings</b><button id="bgX" title="Close">✕</button></div>
-    ${[['bg', 'Background'], ['grid', 'Grid lines']].map(([k, label]) => `
-    <label class="candle-color-row">${label} <div class="candle-color-control"><button type="button" class="candle-color-toggle" data-bg-toggle="${k}" aria-expanded="false"><span id="${BG_KEYS[k][0]}" class="icolor-swatch"></span>Color</button></div></label>
-    <div class="candle-palette" id="${BG_KEYS[k][1]}" hidden>
-        ${ColorPalette.html(c => `data-bg-color="${k}" data-color="${c}"`)}
-        <label class="candle-hex">HEX <input type="text" id="${BG_KEYS[k][2]}" class="ihex" maxlength="7" aria-label="${label} HEX"></label>
-    </div>`).join('')}
-    <div class="iopacity"><span>Grid opacity</span><input type="range" id="gridOp" min="0" max="100" step="1"><output id="gridOpOut"></output></div>
-    <div id="bgBtns"><button type="button" id="bgReset">Reset to default</button></div>`;
-$('pop').after(bgPop);
 
 function bgLuma(hex) {
     const n = parseInt(hex.slice(1), 16);
     return (0.299 * (n >> 16) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
 }
 function applyBackground(save = true) {
-    const gridCol = rgbaC(bgCfg.grid, bgCfg.gridOp), light = bgLuma(bgCfg.bg) > 0.6;
+    const gridCol = rgbaC(bgCfg.grid, bgCfg.gridOp), light = bgLuma(bgCfg.bg) > 0.6, clear = 'rgba(0,0,0,0)';
+    const vert = bgCfg.gridMode === 'Vert and horz' || bgCfg.gridMode === 'Vert only', horz = bgCfg.gridMode === 'Vert and horz' || bgCfg.gridMode === 'Horz only';
+    const xh = { color: bgCfg.cross, style: LINE_STYLES[bgCfg.crossStyle] ?? 2 };
     chart.applyOptions({
         layout: { background: { type: 'solid', color: bgCfg.bg }, textColor: light ? '#131722' : '#d1d4dc' },
-        grid: { vertLines: { color: gridCol }, horzLines: { color: gridCol } }
+        grid: { vertLines: { color: vert ? gridCol : clear, visible: vert }, horzLines: { color: horz ? gridCol : clear, visible: horz } },
+        crosshair: { vertLine: xh, horzLine: xh }
     });
     document.documentElement.style.setProperty('--chart-bg', bgCfg.bg);
-    for (const k of ['bg', 'grid']) {
-        $(BG_KEYS[k][0]).style.background = bgCfg[k];
-        const hex = $(BG_KEYS[k][2]);
-        if (document.activeElement !== hex) hex.value = bgCfg[k];
-    }
-    $('gridOp').value = bgCfg.gridOp;
-    $('gridOpOut').textContent = bgCfg.gridOp + '%';
     if (save) store.set('bg', bgCfg);
 }
-function closeBgPanels() {
-    for (const k of ['bg', 'grid']) $(BG_KEYS[k][1]).hidden = true;
-    bgPop.querySelectorAll('[data-bg-toggle]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+/* colour popover targets for the Canvas tab (the popover itself is in candle-colors.js) */
+PAL.bg = { hex: () => bgCfg.bg, op: null, set: v => { bgCfg.bg = v; }, commit: () => { applyBackground(); } };
+PAL.grid = { hex: () => bgCfg.grid, op: () => bgCfg.gridOp, set: (v, o) => { bgCfg.grid = v; if (o != null) bgCfg.gridOp = o; }, commit: () => applyBackground() };
+PAL.cross = { hex: () => bgCfg.cross, op: null, set: v => { bgCfg.cross = v; }, commit: () => applyBackground() };
+function renderCanvas() {
+    const row = (label, ctl) => `<div class="st-row"><span class="st-l">${label}</span><span class="st-c">${ctl}</span></div>`;
+    const sel = (k, opts) => `<select data-cv="${k}">${opts.map(o => `<option${o === bgCfg[k] ? ' selected' : ''}>${o}</option>`).join('')}</select>`;
+    return `<div class="st-sec">CHART BASIC STYLES</div>
+        ${row('Background', swatch('bg'))}
+        ${row('Grid lines', sel('gridMode', GRID_MODES) + swatch('grid'))}
+        <div class="st-sec">CROSSHAIR</div>
+        ${row('Crosshair', sel('crossStyle', Object.keys(LINE_STYLES)) + swatch('cross'))}`;
 }
-bgPop.addEventListener('click', e => {
-    const toggle = e.target.closest('[data-bg-toggle]');
-    if (toggle) {
-        const panel = $(BG_KEYS[toggle.dataset.bgToggle][1]), wasOpen = !panel.hidden;
-        closeBgPanels();
-        panel.hidden = wasOpen;
-        toggle.setAttribute('aria-expanded', String(!wasOpen));
-        return;
-    }
-    const swatch = e.target.closest('[data-bg-color]');
-    if (swatch) {
-        bgCfg[swatch.dataset.bgColor] = swatch.dataset.color;
-        closeBgPanels();
-        applyBackground();
-    }
-});
-bgPop.addEventListener('input', e => {
-    if (e.target.id === 'gridOp') {
-        bgCfg.gridOp = Math.max(0, Math.min(100, +e.target.value));
-        applyBackground();
-        return;
-    }
-    for (const k of ['bg', 'grid']) {
-        if (e.target.id === BG_KEYS[k][2] && /^#[0-9a-f]{6}$/i.test(e.target.value)) {
-            bgCfg[k] = e.target.value;
-            applyBackground();
-        }
-    }
-});
-$('bgReset').onclick = () => {
-    Object.assign(bgCfg, BG_DEFAULT);
-    closeBgPanels();
+/* <select> changes inside the Canvas tab (called from the dialog's input handler) */
+function canvasInput(el) {
+    const k = el.dataset.cv;
+    if (!k) return false;
+    bgCfg[k] = el.value;
     applyBackground();
-};
-$('bgX').onclick = () => { bgPop.hidden = true; };
-function openBgSet() {
-    $('imenu').hidden = true;
-    $('btnInd').setAttribute('aria-expanded', 'false');
-    $('pop').hidden = true;
-    closeBgPanels();
-    bgPop.hidden = false;
+    return true;
 }
+function resetCanvas() { Object.assign(bgCfg, BG_DEFAULT); applyBackground(); }
 // On touch phones, double-tapping the empty plotting area opens Background Settings.
 // Candle double-taps remain reserved for Candle Settings in 04-candle-colors.js.
 let lastBackgroundTap = null;
 $('cw').addEventListener('pointerup', e => {
     if (e.pointerType !== 'touch' || !matchMedia('(pointer: coarse) and (max-width: 820px)').matches) return;
-    if (!e.target.closest('#chart') || e.target.closest('#lg,#iset,#pop,#bgset,#tl,.dr-tb,.dr-fly,.dr-fb,.dr-set,.dr-ta,.dr-svg,[data-dr-ui],#scaleModes,#jumpNow')) {
+    if (!e.target.closest('#chart') || e.target.closest('#lg,#iset,#pop,#tl,.dr-tb,.dr-fly,.dr-fb,.dr-set,.dr-ta,.dr-svg,[data-dr-ui],#scaleModes,#jumpNow')) {
         lastBackgroundTap = null;
         return;
     }
@@ -373,12 +681,6 @@ $('cw').addEventListener('pointerup', e => {
         openBgSet();
     } else lastBackgroundTap = { time: now, x: e.clientX, y: e.clientY };
 }, true);
-document.addEventListener('click', e => {
-    if (!bgPop.contains(e.target)) bgPop.hidden = true;
-});
-addEventListener('keydown', e => {
-    if (e.key === 'Escape') bgPop.hidden = true;
-});
 applyBackground(false);
 /* ---------- Initial fit and fast Reset Chart viewport ---------- */
 function fit() {
@@ -452,7 +754,7 @@ async function resetChartView() {
             }
             data = older.concat(data);
             validatePriceScaleForData();
-            series.setData(data);
+            setBars(data);
             window.IND && IND.full();
             // Reapply only after the missing bars are available; this still targets the newest bars.
             applyResetViewport();
@@ -488,7 +790,7 @@ function applyBar(b) {
     if (b.time === l) {
         data[n - 1] = b;
         validatePriceScaleForData();
-        series.update(b);
+        updateBar(b);
         return;
     }
     if (b.time < l)
@@ -497,7 +799,7 @@ function applyBar(b) {
     const ts = chart.timeScale(), rg = ts.getVisibleLogicalRange(), follow = !!rg && rg.from <= n - 1 && rg.to >= n - 1;
     data.push(b);
     validatePriceScaleForData();
-    series.update(b);
+    updateBar(b);
     syncFut();
     if (follow)
         ts.setVisibleLogicalRange({ from: rg.from + 1, to: rg.to + 1 });
@@ -520,7 +822,7 @@ async function loadChart(first, force) {
         $('ld').style.display = 'none';
         window.RP && RP.afterData(); /* replay carried over a symbol / timeframe switch */
         validatePriceScaleForData();
-        series.setData(data);
+        setBars(data);
         syncFut();
         const l = data[data.length - 1];
         lastClose = l.close;
@@ -571,7 +873,7 @@ async function loadChart(first, force) {
     $('ld').style.display = 'none';
     window.RP && RP.afterData();
     validatePriceScaleForData();
-    series.setData(data);
+    setBars(data);
     syncFut();
     const l = k[k.length - 1];
     lastClose = +l[4];
@@ -638,7 +940,7 @@ async function loadOlder() {
         const add = k.map(candle), rg = chart.timeScale().getVisibleLogicalRange();
         data = add.concat(data);
         validatePriceScaleForData();
-        series.setData(data);
+        setBars(data);
         window.IND && IND.full();
         if (rg)
             chart.timeScale().setVisibleLogicalRange({ from: rg.from + add.length, to: rg.to + add.length }); /* keep the view where it was */
@@ -824,8 +1126,7 @@ $('cw').addEventListener('contextmenu', e => {
         const t = p.toFixed(map[sym] ? map[sym].dec : 2);
         items.push([`Copy price ${t}`, () => copyText(t)]);
     }
-    items.push(['Candle Settings', () => setTimeout(openCandleSet, 0)]);
-    items.push(['Background Settings', () => setTimeout(openBgSet, 0)]);
+    items.push(['Settings…', () => setTimeout(openCandleSet, 0)]);
     showMenu(e.clientX, e.clientY, items);
 });
 /* ---------- Linear / logarithmic price scale ----------
@@ -955,7 +1256,7 @@ function resetState() {
     stash();
     tok++;
     ctl && ctl.abort();
-    series.setData([]);
+    setBars([]);
     fut.setData([]);
     data = [];
     noMore = false;
@@ -1016,7 +1317,7 @@ var RP = (function () {
     function redraw() {
         const ts = chart.timeScale(), rg = ts.getVisibleLogicalRange();
         validatePriceScaleForData();
-        series.setData(data);
+        setBars(data);
         syncFut();
         window.IND && IND.full();
         if (rg) ts.setVisibleLogicalRange(rg);
@@ -1131,7 +1432,7 @@ var RP = (function () {
         pending = null; rePickFrom = null; mode = 'off';
         ui();
         if (was && data.length) {
-            series.setData(data);
+            setBars(data);
             syncFut();
             const l = data[data.length - 1];
             lastClose = l.close; lastUp = l.close >= l.open;
@@ -2313,7 +2614,7 @@ setInterval(() => {
         refresh(false, true);
 }, 15000);
 /* ---------- Start ---------- */
-setColors(cUp, cDn);
+applyCandleCfg(false);
 refresh(true).then(() => { loadChart(true); connect(); });
 /* ---------- Mobile navigation: bottom tab bar (Watchlist / Chart / Draw) ----------
    Phones show one page at a time. The tab bar is only displayed by the mobile CSS layout;
