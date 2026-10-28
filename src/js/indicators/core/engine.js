@@ -5,6 +5,21 @@ var IND = (function () {
     const M = t => INDREG.get(t);
     let inds = [], uid = 0, mkSig = '', tt = 0, setId = 0, wt = 0, lastIndicatorTap = null, lastChartIndicatorTap = null;
     const save = () => store.set('inds', inds.map(i => ({ t: i.t, p: i.p, v: i.v })));
+    /* ---------- Remembered settings ----------
+       The last settings the user chose for an indicator type are stored under 'indDef:<type>' and used by every new instance
+       (also after a restart) until the user presses "Reset to Default" in that indicator's settings panel. */
+    const defKey = t => 'indDef:' + t;
+    const copyP = p => JSON.parse(JSON.stringify(p));
+    /* Only keys the module knows, and only values of the same type as the factory default, are accepted from storage. */
+    function remembered(t) {
+        const def = M(t).defaults, saved = store.get(defKey(t), null), out = copyP(def);
+        if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return out;
+        for (const k of Object.keys(def))
+            if (k in saved && typeof saved[k] === typeof def[k] && (typeof saved[k] !== 'number' || Number.isFinite(saved[k]))) out[k] = saved[k];
+        return out;
+    }
+    const remember = ind => store.set(defKey(ind.t), copyP(ind.p));
+    const forget = t => store.set(defKey(t), null);
     const MAXNEED = 5000;
     const needOf = i => Math.min(MAXNEED, M(i.t).need(i.p));
     /* full recalculation; "settled" = enough history is loaded for the recursive averages to be anchored */
@@ -320,13 +335,13 @@ var IND = (function () {
         $('iset').innerHTML = `<div class="ih"><b>${D.name}</b><button type="button" data-a="close" title="Close settings" aria-label="Close ${D.name} settings">✕</button></div>`
             + (tabs.length > 1 ? `<div class="itabs" role="tablist">${tabs.map(t => `<button type="button" role="tab" data-itab="${t[0]}" class="${t[0] === setTab ? 'on' : ''}" aria-selected="${t[0] === setTab}">${t[1]}</button>`).join('')}</div>` : '')
             + tabs.map(t => `<div class="ipane" data-ipane="${t[0]}"${t[0] === setTab ? '' : ' hidden'}>${t[2].map(f => field(ind, f)).join('')}</div>`).join('')
-            + `<div class="if"><button data-a="def">Defaults</button></div>`;
+            + `<div class="if"><button type="button" data-a="def">Reset to Default</button></div>`;
         $('iset').hidden = false;
         const area = $('cw').getBoundingClientRect(), rr = row.getBoundingClientRect();
         $('iset').style.left = Math.max(0, Math.min(area.width - $('iset').offsetWidth, rr.left - area.left)) + 'px';
         $('iset').style.top = Math.max(0, Math.min(area.height - $('iset').offsetHeight, rr.bottom - area.top + 4)) + 'px';
     }
-    function changed(ind) { ind.anchor = null; style(ind); applyFull(ind); markers(true); legend(); save(); warm(); }
+    function changed(ind, keep = true) { ind.anchor = null; style(ind); applyFull(ind); markers(true); legend(); save(); if (keep) remember(ind); warm(); }
     $('iset').addEventListener('input', e => {
         const el = e.target, k = el.dataset.k, ind = inds.find(i => i.id === setId);
         if ((!k && !el.dataset.opacity) || !ind)
@@ -378,8 +393,10 @@ var IND = (function () {
             $('iset').hidden = true;
             setId = 0;
         } else if (action === 'def' && ind) {
-            ind.p = Object.assign({}, M(ind.t).defaults);
-            changed(ind);
+            /* Reset only this indicator type: factory settings for this instance, and forget the remembered ones. */
+            forget(ind.t);
+            ind.p = copyP(M(ind.t).defaults);
+            changed(ind, false);
             openSet(ind, document.querySelector(`.lr[data-id="${ind.id}"]`) || $('lg'));
         }
     });
@@ -498,7 +515,7 @@ var IND = (function () {
     function add(t) {
         if (M(t).vol && inds.some(i => i.t === t))
             return;
-        const ind = { t, p: Object.assign({}, M(t).defaults), v: true };
+        const ind = { t, p: remembered(t), v: true };
         create(ind);
         inds.push(ind);
         margins();

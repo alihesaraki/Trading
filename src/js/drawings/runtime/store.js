@@ -60,10 +60,27 @@
     }
     /** Per-tool remembered style (TradingView-like "default settings"). */
     toolDefaults(type) {
-      return this.storage.get(`dr:def:${type}`, {}) || {};
+      const raw = this.storage.get(`dr:def:${type}`, null);
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+      const props = raw.props && typeof raw.props === "object" ? { ...raw.props } : {};
+      delete props.text; /* the text of one drawing is content, not a setting */
+      return { style: raw.style && typeof raw.style === "object" ? raw.style : {}, props };
     }
+    /** Remember a drawing's look as the default for every future drawing of the same tool (saved on every change). */
     saveToolDefaults(d2) {
-      this.storage.set(`dr:def:${d2.type}`, { style: d2.style, props: d2.props });
+      if (!d2 || !TOOL_MAP[d2.type]) return;
+      const props = clone(d2.props || {});
+      delete props.text;
+      this.storage.set(`dr:def:${d2.type}`, { style: clone(d2.style || {}), props });
+    }
+    /** Reset one tool: forget its remembered settings and restore this drawing to the tool's original defaults
+        (geometry, text and lock state are kept). */
+    resetTool(d2) {
+      this.storage.set(`dr:def:${d2.type}`, null);
+      const fresh = makeDrawing(d2.type, d2.points);
+      d2.style = fresh.style;
+      d2.props = { ...fresh.props, ...(d2.props && "text" in d2.props ? { text: d2.props.text } : {}) };
+      this.touch();
     }
     get(id) {
       return this.items.find((d2) => d2.id === id);

@@ -886,10 +886,27 @@
     }
     /** Per-tool remembered style (TradingView-like "default settings"). */
     toolDefaults(type) {
-      return this.storage.get(`dr:def:${type}`, {}) || {};
+      const raw = this.storage.get(`dr:def:${type}`, null);
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+      const props = raw.props && typeof raw.props === "object" ? { ...raw.props } : {};
+      delete props.text; /* the text of one drawing is content, not a setting */
+      return { style: raw.style && typeof raw.style === "object" ? raw.style : {}, props };
     }
+    /** Remember a drawing's look as the default for every future drawing of the same tool (saved on every change). */
     saveToolDefaults(d2) {
-      this.storage.set(`dr:def:${d2.type}`, { style: d2.style, props: d2.props });
+      if (!d2 || !TOOL_MAP[d2.type]) return;
+      const props = clone(d2.props || {});
+      delete props.text;
+      this.storage.set(`dr:def:${d2.type}`, { style: clone(d2.style || {}), props });
+    }
+    /** Reset one tool: forget its remembered settings and restore this drawing to the tool's original defaults
+        (geometry, text and lock state are kept). */
+    resetTool(d2) {
+      this.storage.set(`dr:def:${d2.type}`, null);
+      const fresh = makeDrawing(d2.type, d2.points);
+      d2.style = fresh.style;
+      d2.props = { ...fresh.props, ...(d2.props && "text" in d2.props ? { text: d2.props.text } : {}) };
+      this.touch();
     }
     get(id) {
       return this.items.find((d2) => d2.id === id);
@@ -2578,12 +2595,12 @@
           const panel = el("div", "dr-color-panel"); panel.hidden = true;
           panel.innerHTML = `${ColorPalette.html((c) => `data-float-color="${c}"`)}<label>HEX <input type="text" class="ihex" value="${hexOf(d2.style[key2])}" maxlength="7"></label><div class="iopacity"><span>Opacity</span><input type="range" min="0" max="100" value="${d2.style.opacity ?? 100}"><output>${d2.style.opacity ?? 100}%</output></div>`;
           toggle.onclick = () => { const open = panel.hidden; this.fb.querySelectorAll(".dr-color-panel").forEach((x2) => x2.hidden = true); this.fb.querySelectorAll(".dr-float-color .icolor-toggle").forEach((x2) => x2.setAttribute("aria-expanded", "false")); panel.hidden = !open; toggle.setAttribute("aria-expanded", String(open)); };
-          const setColor = (hex) => { this.store.begin(); sel.forEach((x2) => { x2.style[key2] = hex; if (key2 === "color" && !hasFill) x2.style.fill = hex; }); this.store.touch(); this.store.end(); toggle.querySelector(".icolor-swatch").style.background = hex; panel.querySelector(".ihex").value = hex; };
+          const setColor = (hex) => { this.store.begin(); sel.forEach((x2) => { x2.style[key2] = hex; if (key2 === "color" && !hasFill) x2.style.fill = hex; }); sel.forEach((x2) => this.store.saveToolDefaults(x2)); this.store.touch(); this.store.end(); toggle.querySelector(".icolor-swatch").style.background = hex; panel.querySelector(".ihex").value = hex; };
           panel.querySelectorAll("[data-float-color]").forEach((b) => b.onclick = () => setColor(b.dataset.floatColor));
           const hex = panel.querySelector(".ihex"); hex.onchange = () => { if (/^#[0-9a-f]{6}$/i.test(hex.value)) setColor(hex.value); else hex.value = hexOf(d2.style[key2]); };
           const range = panel.querySelector('input[type="range"]'), output = panel.querySelector("output");
           range.onpointerdown = () => this.store.begin();
-          range.oninput = () => { const opacity = Math.max(0, Math.min(100, +range.value)); sel.forEach((x2) => x2.style.opacity = opacity); this.store.touch(); output.textContent = opacity + "%"; };
+          range.oninput = () => { const opacity = Math.max(0, Math.min(100, +range.value)); sel.forEach((x2) => { x2.style.opacity = opacity; this.store.saveToolDefaults(x2); }); this.store.touch(); output.textContent = opacity + "%"; };
           range.onchange = () => this.store.end();
           wrap.append(toggle, panel); add(wrap);
         };
@@ -2595,6 +2612,7 @@
           w3.innerHTML = [1, 2, 3, 4, 6].map((n) => `<option ${n === d2.style.width ? "selected" : ""}>${n}</option>`).join("");
           w3.onchange = () => this.store.mutate(() => sel.forEach((x2) => {
             x2.style.width = +w3.value;
+            this.store.saveToolDefaults(x2);
           }));
           add(w3);
           const ds = el("select");
@@ -2602,6 +2620,7 @@
           ds.innerHTML = ["solid", "dashed", "dotted"].map((n) => `<option ${n === d2.style.dash ? "selected" : ""}>${n}</option>`).join("");
           ds.onchange = () => this.store.mutate(() => sel.forEach((x2) => {
             x2.style.dash = ds.value;
+            this.store.saveToolDefaults(x2);
           }));
           add(ds);
         }
@@ -2675,11 +2694,12 @@
       this.settings = p;
       this.settingsId = d2.id;
       p.innerHTML = `<div class="dr-sh"><b>${esc2(def.label)}</b><button class="dr-x" type="button" title="Close" aria-label="Close" data-dr-ui>\u2715</button></div><div class="dr-tabs" role="tablist" data-dr-ui></div><div class="dr-sb dr-sb-style"></div><div class="dr-sb dr-sb-coords" hidden></div>
-      <div class="dr-sf"><button data-a="def" data-dr-ui>Save as default</button><button data-a="ok" class="pri" data-dr-ui>Done</button></div>`;
+      <div class="dr-sf"><button type="button" data-a="def" data-dr-ui>Reset to Default</button><button data-a="ok" class="pri" data-dr-ui>Done</button></div>`;
       const body = p.querySelector(".dr-sb-style"), cbody = p.querySelector(".dr-sb-coords"), tabs = p.querySelector(".dr-tabs");
       this.store.begin();
       const rows = [];
       const live = () => {
+        this.store.saveToolDefaults(d2); /* every change is remembered for the next drawing of this tool */
         this.store.touch();
         rows.forEach((r) => r.sync?.());
       };
@@ -2786,7 +2806,12 @@
       const close = () => this.closeSettings();
       p.querySelector(".dr-x").onclick = close;
       p.querySelector("[data-a=ok]").onclick = close;
-      p.querySelector("[data-a=def]").onclick = () => this.store.saveToolDefaults(d2);
+      p.querySelector("[data-a=def]").onclick = () => {
+        const left = p.style.left, top = p.style.top;
+        this.store.resetTool(d2);
+        this.openSettings(d2); /* rebuild the form with the original values, keeping the window where the user put it */
+        if (this.settings && left) { this.settings.style.left = left; this.settings.style.top = top; }
+      };
       this.host.appendChild(p);
       p.addEventListener("keydown", (e) => {
         e.stopPropagation();
