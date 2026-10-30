@@ -89,12 +89,8 @@
         this.sep()
       );
       for (const g of GROUPS) {
-        const b = this.btn("g:" + g.id, g.icon, g.label, () => c.setTool(this.lastTool[g.id]), "dr-grp");
+        const b = this.btn("g:" + g.id, g.icon, g.label, () => this.openFly(g.id, b), "dr-grp");
         const caret = el("span", "dr-caret", "\u25B8");
-        caret.onclick = (e) => {
-          e.stopPropagation();
-          this.openFly(g.id, b);
-        };
         b.appendChild(caret);
         b.oncontextmenu = (e) => {
           e.preventDefault();

@@ -14,6 +14,19 @@ function setFlag(k, c) {
     buildView();
     sched();
 }
+/* Favorites: a second watchlist view (the star tab next to All). Empty by default; coins are added from the right-click menu. */
+let favs = store.get('favs', {});
+if (!favs || typeof favs !== 'object' || Array.isArray(favs))
+    favs = {};
+function toggleFav(k) {
+    if (favs[k])
+        delete favs[k];
+    else
+        favs[k] = 1;
+    store.set('favs', favs);
+    buildView();
+    sched();
+}
 let flPick = null;
 function closeFlagPicker() {
     if (flPick) {

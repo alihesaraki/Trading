@@ -91,7 +91,7 @@ let ver = 0;
    view = selectable coins only (keyboard navigation); rows = coins + section headers (rendering) */
 function buildView() {
     const q = query.trim().toUpperCase();
-    const matches = all.filter(s => (!q || s.b.startsWith(q) || coinName(s.b).startsWith(q)) && (!flt || flags[s.s] === flt));
+    const matches = all.filter(s => (!q || s.b.startsWith(q) || coinName(s.b).startsWith(q)) && (!flt || (flt === 'fav' ? !!favs[s.s] : flags[s.s] === flt)));
     // Search results prioritize the shortest matching ticker (e.g. S before SOL).
     const items = q
         ? matches.sort((a, b) => a.b.length - b.b.length || a.b.localeCompare(b.b) || a.s.localeCompare(b.s))
@@ -117,7 +117,7 @@ function buildView() {
     }
     ver++;
     $('msg').style.display = rows.length ? 'none' : 'block';
-    $('msg').textContent = all.length ? (flt ? 'No flagged coins' : 'No results') : 'Loading…';
+    $('msg').textContent = all.length ? (flt === 'fav' ? 'No favorite coins yet' : flt ? 'No flagged coins' : 'No results') : 'Loading…';
     $('sp').style.height = rows.length * ROW + 'px';
     [...$('cols').children].forEach(c => { const on = c.dataset.k === sortKey; c.className = on ? 'a' + (sortDir > 0 ? ' asc' : '') : ''; });
 }
@@ -210,7 +210,7 @@ $('list').oncontextmenu = e => {
     if (h)
         showMenu(e.clientX, e.clientY, [['Rename section', () => renameSec(h.dataset.sec)], ['Delete section', () => delSection(h.dataset.sec)], ...rst]);
     else
-        showMenu(e.clientX, e.clientY, [['Add section', () => addSection(r && r.dataset.s)], ...rst]);
+        showMenu(e.clientX, e.clientY, [['Add section', () => addSection(r && r.dataset.s)], ...(r ? [[favs[r.dataset.s] ? 'Remove from favorite' : 'Add to favorite', () => toggleFav(r.dataset.s)]] : []), ...rst]);
 };
 /* Header click: sort cycle (first direction <-> opposite; two states only) */
 $('cols').onclick = e => {
