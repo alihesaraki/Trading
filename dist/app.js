@@ -1747,7 +1747,7 @@ const fmt = s => { const n = (+s.p).toFixed(+s.p > 10 ? 2 : s.dec), [i, d] = n.s
 const FLAG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 2h2v2h11l-2.5 5 2.5 5H8v8H6z"/></svg>';
 let flags = store.get('flags', {}), flt = '';
 /* Flag colors: picked from a small palette popup (like TradingView), not cycled */
-const FLAG_COLORS = [['r', 'Red'], ['g', 'Green'], ['b', 'Blue']];
+const FLAG_COLORS = [['r', 'Red'], ['g', 'Green']];
 function setFlag(k, c) {
     if (c)
         flags[k] = c;
@@ -1761,6 +1761,12 @@ function setFlag(k, c) {
 let favs = store.get('favs', {});
 if (!favs || typeof favs !== 'object' || Array.isArray(favs))
     favs = {};
+/* Legacy blue flags become favorites now that the blue-flag category is replaced by the star. */
+for (const k of Object.keys(flags)) {
+    if (flags[k] === 'b') { favs[k] = 1; delete flags[k]; }
+}
+store.set('flags', flags);
+store.set('favs', favs);
 function toggleFav(k) {
     if (favs[k])
         delete favs[k];
@@ -1782,6 +1788,7 @@ function toggleFlag(k, anchor) {
     const el = document.createElement('div');
     el.id = 'flpick';
     el.innerHTML = FLAG_COLORS.map(([c, n]) => `<button class="sw ${c}${flags[k] === c ? ' on' : ''}" data-c="${c}" title="${n}">${FLAG}</button>`).join('')
+        + `<button class="sw star${favs[k] ? ' on' : ''}" data-c="fav" title="${favs[k] ? 'Remove from favorites' : 'Add to favorites'}"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 17.5l-5.9 3.2 1.2-6.6L2.5 9.5l6.6-.9z"/></svg></button>`
         + `<button class="sw x" data-c="" title="Remove flag">&#10005;</button>`;
     document.body.appendChild(el);
     const r = anchor.getBoundingClientRect();
@@ -1792,7 +1799,8 @@ function toggleFlag(k, anchor) {
         if (!b)
             return;
         closeFlagPicker();
-        setFlag(k, b.dataset.c);
+        if (b.dataset.c === 'fav') toggleFav(k);
+        else setFlag(k, b.dataset.c);
     };
     flPick = el;
 }
@@ -1889,7 +1897,23 @@ function checkDay() {
    group. secs = ordered headers [{id,n:name,c:collapsed}], secOf = coin -> section id (no entry = top group).
    Sections are shown only when no search / flag filter is active. */
 let secs = store.get('secs', []), secOf = store.get('secOf', {}), editing = null, rows = [];
-const saveSecs = () => { store.set('secs', secs); store.set('secOf', secOf); };
+let sectionScope = 'all';
+const scopeKey = () => flt || 'all';
+const saveSecs = () => {
+    const scope = sectionScope;
+    if (scope === 'all') { store.set('secs', secs); store.set('secOf', secOf); }
+    else { store.set('secs_' + scope, secs); store.set('secOf_' + scope, secOf); }
+};
+function syncSectionScope() {
+    const next = scopeKey();
+    if (next === sectionScope) return;
+    sectionScope = next;
+    if (next === 'all') { secs = store.get('secs', []); secOf = store.get('secOf', {}); }
+    else { secs = store.get('secs_' + next, []); secOf = store.get('secOf_' + next, {}); }
+    if (!Array.isArray(secs)) secs = [];
+    if (!secOf || typeof secOf !== 'object' || Array.isArray(secOf)) secOf = {};
+    editing = null;
+}
 const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 /* Section id a coin belongs to (0 = ungrouped top group) */
 const gidOf = sy => secs.some(x => x.id === secOf[sy]) ? secOf[sy] : 0;
@@ -1968,29 +1992,33 @@ function endEdit(inp, ok) {
     buildView();
     sched();
 }
-const secHtml = x => `<div class="row sec" data-sec="${x.sec}"><span class="sc">${x.closed ? '▸' : '▾'}</span>${editing === x.sec ? `<input class="sni" maxlength="40" value="${esc(x.name)}">` : `<span class="sn">${esc(x.name)}</span>`}<span class="sk">${x.n}</span></div>`;
+const secHtml = x => `<div class="row sec" data-sec="${x.sec}"><span class="sc" role="button" tabindex="0" aria-label="${x.closed ? 'Expand' : 'Collapse'} section">${x.closed ? '▸' : '▾'}</span>${editing === x.sec ? `<input class="sni" maxlength="40" value="${esc(x.name)}">` : `<span class="sn">${esc(x.name)}</span>`}<span class="sk">${x.n}</span></div>`;
 /* Shown name: the 1000 / 1000000 prefix of Binance's multiplied contracts is dropped (1000PEPE -> PEPE); long names get a smaller font. */
 const coinName = b => b.replace(/^10{3,}(?=[A-Z])/, '');
 const nmCls = b => { const n = coinName(b).length; return n > 8 ? ' xlong' : n > 5 ? ' long' : ''; };
-let ver = 0;
+let ver = 0, fullRows = [];
 /* Filter + sort the list, build grouped rows, set the scroll height, mark the sorted column header.
    view = selectable coins only (keyboard navigation); rows = coins + section headers (rendering) */
 function buildView() {
+    syncSectionScope();
     const q = query.trim().toUpperCase();
     const matches = all.filter(s => (!q || s.b.startsWith(q) || coinName(s.b).startsWith(q)) && (!flt || (flt === 'fav' ? !!favs[s.s] : flags[s.s] === flt)));
     // Search results prioritize the shortest matching ticker (e.g. S before SOL).
     const items = q
         ? matches.sort((a, b) => a.b.length - b.b.length || a.b.localeCompare(b.b) || a.s.localeCompare(b.s))
         : sortList(matches);
-    if (secs.length && !q && !flt) { /* top group first, then each section; collapsed sections hide their coins */
+    if (secs.length && !q) { /* each tab has its own independent section groups */
         const g = { 0: [] };
         secs.forEach(x => g[x.id] = []);
         for (const s of items)
             g[gidOf(s.s)].push(s);
         view = [...g[0]];
         rows = [...g[0]];
+        fullRows = [...g[0]];
         for (const x of secs) {
-            rows.push({ sec: x.id, name: x.n, closed: x.c, n: g[x.id].length });
+            const headerRow = { sec: x.id, name: x.n, closed: x.c, n: g[x.id].length };
+            fullRows.push(headerRow, ...g[x.id]);
+            rows.push(headerRow);
             if (!x.c) {
                 view.push(...g[x.id]);
                 rows.push(...g[x.id]);
@@ -2000,6 +2028,7 @@ function buildView() {
     else {
         view = items;
         rows = items;
+        fullRows = items;
     }
     ver++;
     $('msg').style.display = rows.length ? 'none' : 'block';
@@ -2020,7 +2049,7 @@ function render() {
     const key = a + '|' + b + '|' + ver + '|' + sym;
     if (key !== lastKey) { /* rows changed -> rebuild */
         lastKey = key;
-        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span><b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span>${flt ? `<button class="row-remove" data-remove="${s.s}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
         if (editing) {
             const i = $('in').querySelector('.sni');
             if (i) {
@@ -2031,7 +2060,7 @@ function render() {
     }
     else { /* same rows -> only patch changed texts */
         for (const r of $('in').children) {
-            const s = map[r.dataset.s], p = r.children[2], c = r.children[3];
+            const s = map[r.dataset.s], p = r.querySelector('.p'), c = r.querySelector('.c');
             if (!s)
                 continue;
             const t = fmt(s);
@@ -2055,12 +2084,18 @@ $('list').addEventListener('scroll', sched, { passive: true });
 $('list').onclick = e => {
     if (Date.now() < noClick)
         return; /* the click that ends a drag */
-    const h = e.target.closest('.sec');
-    if (h) {
-        if (!e.target.closest('input'))
-            toggleSec(h.dataset.sec);
+    const arrow = e.target.closest('.sec .sc');
+    if (arrow) {
+        toggleSec(arrow.closest('.sec').dataset.sec);
         return;
-    } /* section header: collapse / expand */
+    }
+    if (e.target.closest('.sec')) return;
+    const remove = e.target.closest('.row-remove');
+    if (remove) {
+        const k = remove.dataset.remove;
+        if (flt === 'fav') toggleFav(k); else setFlag(k, '');
+        return;
+    }
     const f = e.target.closest('.fl');
     if (f) {
         toggleFlag(f.dataset.f, f);
@@ -2071,32 +2106,34 @@ $('list').onclick = e => {
         select(r.dataset.s);
 };
 $('list').ondblclick = e => {
-    const h = e.target.closest('.sec');
-    if (h && !e.target.closest('input'))
-        renameSec(h.dataset.sec);
+    const name = e.target.closest('.sec .sn');
+    if (name)
+        renameSec(name.closest('.sec').dataset.sec);
 };
 $('list').addEventListener('focusout', e => {
     if (e.target.classList.contains('sni'))
         endEdit(e.target, true);
 });
 $('list').addEventListener('keydown', e => {
-    if (!e.target.classList.contains('sni'))
+    if (e.target.classList.contains('sc') && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        toggleSec(e.target.closest('.sec').dataset.sec);
         return;
-    if (e.key === 'Enter')
-        e.target.blur();
-    else if (e.key === 'Escape')
-        endEdit(e.target, false);
+    }
+    if (!e.target.classList.contains('sni')) return;
+    if (e.key === 'Enter') e.target.blur();
+    else if (e.key === 'Escape') endEdit(e.target, false);
 });
 /* Watchlist right-click: coin / empty space -> add section; section header -> rename / delete */
 $('list').oncontextmenu = e => {
     e.preventDefault();
     if (dg && dg.on)
         return;
-    const h = e.target.closest('.sec'), r = e.target.closest('.row:not(.sec)'), rst = ord.length ? [['Reset order (by volume)', resetOrder]] : [];
+    const h = e.target.closest('.sec'), r = e.target.closest('.row:not(.sec)');
     if (h)
-        showMenu(e.clientX, e.clientY, [['Rename section', () => renameSec(h.dataset.sec)], ['Delete section', () => delSection(h.dataset.sec)], ...rst]);
+        showMenu(e.clientX, e.clientY, [['Rename section', () => renameSec(h.dataset.sec)], ['Delete section', () => delSection(h.dataset.sec)]]);
     else
-        showMenu(e.clientX, e.clientY, [['Add section', () => addSection(r && r.dataset.s)], ...(r ? [[favs[r.dataset.s] ? 'Remove from favorite' : 'Add to favorite', () => toggleFav(r.dataset.s)]] : []), ...rst]);
+        showMenu(e.clientX, e.clientY, [['Add section', () => addSection(r && r.dataset.s)], ...(r ? [[favs[r.dataset.s] ? 'Remove from favorite' : 'Add to favorite', () => toggleFav(r.dataset.s)]] : [])]);
 };
 /* Header click: sort cycle (first direction <-> opposite; two states only) */
 $('cols').onclick = e => {
@@ -2266,9 +2303,10 @@ $('list').addEventListener('pointerdown', e => {
     if (dg || e.button || (e.pointerType === 'mouse' && e.buttons !== 1))
         return;
     const r = e.target.closest('.row');
-    if (!r || !r.dataset.s || e.target.closest('.fl,input'))
-        return;
-    dg = { s: r.dataset.s, x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, id: e.pointerId, on: false, touch: e.pointerType === 'touch', slot: -1, t: 0, raf: 0, dy: 0, g: null };
+    if (!r || e.target.closest('.fl,.row-remove,input,.sc')) return;
+    const isSection = r.classList.contains('sec');
+    if (!isSection && !r.dataset.s) return;
+    dg = { kind: isSection ? 'section' : 'coin', sec: isSection ? r.dataset.sec : '', s: isSection ? '' : r.dataset.s, x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, id: e.pointerId, on: false, touch: e.pointerType === 'touch', slot: -1, t: 0, raf: 0, dy: 0, g: null };
     if (dg.touch)
         dg.t = setTimeout(() => {
             if (dg && !dg.on)
@@ -2293,13 +2331,13 @@ function dgMove(e) {
     } /* touch moved early = the user is scrolling */
 }
 function dgStart() {
-    const d = dg, row = $('in').querySelector(`[data-s="${d.s}"]`);
+    const d = dg, row = d.kind === 'section' ? $('in').querySelector(`[data-sec="${d.sec}"]`) : $('in').querySelector(`[data-s="${d.s}"]`);
     if (!row) {
         dgStop(false);
         return;
     }
     d.on = true;
-    dragS = d.s;
+    if (d.kind === 'coin') dragS = d.s;
     const rc = row.getBoundingClientRect(), g = row.cloneNode(true);
     g.className = 'row gh';
     g.style.width = rc.width + 'px';
@@ -2325,7 +2363,7 @@ function dgUpd() {
     const s = clamp(Math.round(y / ROW), 0, rows.length), pv = rows[s - 1], nx = rows[s];
     d.slot = out ? -1 : s;
     const dl = $('dl');
-    dl.hidden = out || !!((pv && pv.s === d.s) || (nx && nx.s === d.s)); /* no line when it would stay where it is */
+    dl.hidden = out || (d.kind === 'coin' && !!((pv && pv.s === d.s) || (nx && nx.s === d.s))); /* no line when it would stay where it is */
     if (!dl.hidden)
         dl.style.transform = `translateY(${s * ROW}px)`;
 }
@@ -2352,8 +2390,10 @@ function dgStop(drop) {
     document.removeEventListener('pointercancel', dgEnd);
     if (!d.on)
         return;
-    if (drop && d.slot >= 0)
-        dropCoin(d.s, d.slot);
+    if (drop && d.slot >= 0) {
+        if (d.kind === 'section') dropSection(d.sec, d.slot);
+        else dropCoin(d.s, d.slot);
+    }
     d.g.remove();
     $('dl').hidden = true;
     document.body.classList.remove('dnd');
@@ -2372,12 +2412,42 @@ function dgEnd(e) {
     }
     dgStop(e.type === 'pointerup');
 }
+/* Move a section divider like TradingView: coins after the divider belong to it until the next divider. */
+function dropSection(id, slot) {
+    if (!fullRows.some(x => x.sec === id)) return;
+    const sequence = fullRows.filter(x => x.sec !== id);
+    const visibleTarget = rows[slot];
+    let target;
+    if (visibleTarget) {
+        target = sequence.findIndex(x => x.sec ? x.sec === visibleTarget.sec : x.s === visibleTarget.s);
+    } else {
+        if (slot >= rows.length) target = sequence.length;
+        else {
+            const prev = rows[slot - 1];
+            target = prev ? sequence.findIndex(x => x.sec ? x.sec === prev.sec : x.s === prev.s) + 1 : sequence.length;
+        }
+    }
+    if (target < 0) target = sequence.length;
+    sequence.splice(target, 0, { sec: id });
+    let active = 0;
+    for (const item of sequence) {
+        if (item.sec) active = item.sec;
+        else if (item.s) {
+            if (active) secOf[item.s] = active;
+            else delete secOf[item.s];
+        }
+    }
+    secs = sequence.filter(x => x.sec).map(x => secs.find(sec => sec.id === x.sec)).filter(Boolean);
+    saveSecs();
+    buildView();
+    sched();
+}
 /* Put coin `sy` at slot `s` of the current rows: updates the manual order and, with sections, its section */
 function dropCoin(sy, s) {
     const pv = rows[s - 1], nx = rows[s];
     if (!map[sy] || (pv && pv.s === sy) || (nx && nx.s === sy))
         return; /* dropped where it already is */
-    const grouped = secs.length && !query.trim() && !flt;
+    const grouped = secs.length && !query.trim();
     ord = sortList(all.slice()).map(x => x.s).filter(x => x !== sy); /* freeze the order currently shown (minus the moved coin) */
     let g = gidOf(sy), anchor = null, before = true;
     if (grouped)
@@ -2892,7 +2962,7 @@ if (mnav) {
     });
     /* Picking a coin in the watchlist jumps to the chart (select() itself already ran) */
     $('list').addEventListener('click', e => {
-        if (!mobileNavOn() || Date.now() < noClick || e.target.closest('.sec,.fl,.sni'))
+        if (!mobileNavOn() || Date.now() < noClick || e.target.closest('.sec,.fl,.row-remove,.sni'))
             return;
         if (e.target.closest('.row')) {
             mView = 'chart';
