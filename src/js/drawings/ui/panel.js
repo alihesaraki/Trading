@@ -55,9 +55,13 @@
       host.append(this.bar, this.fly, this.fb, this.hint);
       for (const g of GROUPS) this.lastTool[g.id] = TOOLS.find((t) => t.group === g.id).type;
       this.buildBar();
-      document.addEventListener("pointerdown", (e) => {
-        if (!e.target.closest(".dr-fly,.dr-tb")) this.closeFly();
-      }, true);
+      // Stable outside-pointer handler scoped to this panel instance.
+      this.onDocumentPointerDown = (e) => {
+        const target = e.target;
+        if (target && (this.bar.contains(target) || this.fly.contains(target))) return;
+        this.closeFly();
+      };
+      document.addEventListener("pointerdown", this.onDocumentPointerDown, true);
       c.hooks.changed = () => this.refresh();
       c.hooks.editText = (d2) => this.editText(d2);
       c.hooks.openSettings = (d2) => this.openSettings(d2);
@@ -65,14 +69,17 @@
       store.on(() => this.refresh());
       window.addEventListener("indchange", () => this.refresh());
     }
-    btn(id, ic, title, fn, cls = "") {
+    btn(id, ic, title, fn, cls = "", eventType = "click") {
       const b = el("button", "dr-b " + cls, icon(ic));
       b.title = title;
       b.dataset.id = id;
-      b.onclick = (e) => {
+      b.addEventListener(eventType, (e) => {
+        // Handle toolbar group activation on pointerdown for immediate response,
+        // while retaining click for all other toolbar actions.
+        e.preventDefault();
         e.stopPropagation();
         fn();
-      };
+      }, { passive: false });
       this.btns.set(id, b);
       return b;
     }
@@ -89,9 +96,7 @@
         this.sep()
       );
       for (const g of GROUPS) {
-        const b = this.btn("g:" + g.id, g.icon, g.label, () => this.openFly(g.id, b), "dr-grp");
-        const caret = el("span", "dr-caret", "\u25B8");
-        b.appendChild(caret);
+        const b = this.btn("g:" + g.id, g.icon, g.label, () => this.openFly(g.id, b), "dr-grp", "pointerdown");
         b.oncontextmenu = (e) => {
           e.preventDefault();
           this.openFly(g.id, b);
@@ -190,8 +195,13 @@
       this.fly.style.top = Math.max(4, Math.min(r.top - h.top, h.height - this.fly.offsetHeight - 4)) + "px";
     }
     closeFly() {
+      // Idempotent: safe for outside clicks, selections and rapid repeated clicks.
       this.fly.hidden = true;
       this.flyGroup = "";
+    }
+    destroy() {
+      document.removeEventListener("pointerdown", this.onDocumentPointerDown, true);
+      this.closeFly();
     }
     /* ---------- refresh (toolbar state, floating bar, hint) ---------- */
     refresh() {
@@ -203,9 +213,7 @@
         const b = this.btns.get("g:" + g.id);
         const t = TOOL_MAP[this.lastTool[g.id]];
         b.classList.toggle("on", cur?.group === g.id);
-        const caret = b.querySelector(".dr-caret");
         b.innerHTML = icon(t.icon);
-        b.appendChild(caret);
         b.title = `${g.label}: ${t.label}`;
       }
       const items = this.store.items;
