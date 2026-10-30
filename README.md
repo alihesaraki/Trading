@@ -11,7 +11,7 @@ A Trading-style market chart UI for **Binance USDT-M Futures**, written in plain
 - Candlestick chart via **Lightweight Charts 4.2.0** (loaded from the jsDelivr CDN).
 - Live data from Binance Futures: REST (`https://fapi.binance.com`) for history and 24h tickers, WebSocket (`wss://fstream.binance.com/market/stream`, legacy `/stream` as automatic fallback) for live prices (`aggTrade`, 100ms) and the forming candle (`kline`, 250ms + trade-driven updates). Market-cap ranking comes from CoinGecko.
 - Timeframes: `1m 5m 15m 1h 4h 1D 1W 1M`. Initial history load, older history on scroll-left, gap catch-up after disconnects, instant candle rollover.
-- Watchlist: search, green/red flag filter, sections, drag & drop ordering, resizable columns, resizable panel that can be moved to the other side.
+- Watchlist: search, All / Favorites (star tab, right-click → Add to favorite) / green/red flag filter, sections, drag & drop ordering, resizable columns, resizable panel that can be moved to the other side.
 - Indicators: SMA, EMA, SMMA, RSI (TradingView-accurate), DMI/ADX, HalfTrend, Volume.
 - Drawing tools: lines, Fibonacci, shapes/brush, annotations, long/short position, measure, fixed-range volume profile; undo/redo; stored per symbol.
 - Chart type menu (button next to *Indicators*): Bars, Candles, Hollow candles, Line, Line with markers, Step line, Area, HLC area, Baseline, Columns, High-low, Heikin Ashi (`src/js/app/chart/chart-type.js`; every candle write goes through `setBars()` / `updateBar()`).
