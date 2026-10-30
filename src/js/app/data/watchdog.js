@@ -5,7 +5,7 @@ setInterval(() => {
         return;
     const t = Date.now();
     if (ws && ws.readyState === 1 && t - lastMsg > 12000)
-        ws.close(); /* silently dead socket -> reconnect */
+        wsReset(); /* silently dead socket -> reconnect right away */
     if (skewOk && closeAt && t + skew > closeAt + 1500)
         catchUp(); /* candle closed but the next one never arrived -> fetch it */
 }, 1000);
@@ -19,7 +19,7 @@ document.addEventListener('visibilitychange', () => {
     const wasIdle = idle;
     idle = false;
     if (!wasIdle && ws && ws.readyState === 1 && Date.now() - lastMsg > 5000)
-        ws.close();
+        wsReset();
     refresh();
     syncWS();
     catchUp(true);

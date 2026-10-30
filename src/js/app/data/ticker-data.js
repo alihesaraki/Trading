@@ -28,8 +28,10 @@ function ingest(arr) {
             s = map[n] = { s: n, b: n.slice(0, -4), p, c: 0, o: opens[n] || 0, qv: 0, mc: marketCaps.get(n.slice(0, -4)) || 0, d: '', dec: (p.split('.')[1] || '').length };
             all.push(s);
         }
-        s.d = +p > +s.p ? 'up' : +p < +s.p ? 'dn' : s.d;
-        s.p = p;
+        if (!(s.t && Date.now() - s.t < 5000)) { /* a live trade price from the last seconds is newer than this REST snapshot */
+            s.d = +p > +s.p ? 'up' : +p < +s.p ? 'dn' : s.d;
+            s.p = p;
+        }
         s.qv = +t.quoteVolume;
         s.c = calc(s);
     }

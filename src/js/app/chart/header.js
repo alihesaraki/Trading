@@ -92,5 +92,6 @@ function header() {
     $('ttl').textContent = `${b} / TetherUS PERPETUAL CONTRACT · ${tl} · Binance`;
     headerValues();
     if (!s || !s.o) return;
-    document.title = `${fmt(s)} ${b} · Binance Futures`;
+    const t = `${fmt(s)} ${b} · Binance Futures`;
+    if (document.title !== t) document.title = t;
 }
