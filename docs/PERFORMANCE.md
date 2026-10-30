@@ -35,3 +35,15 @@ No before/after browser benchmark or profiling session was available. Therefore,
 - Every USDT perpetual is listed, including non-ASCII names. Dated futures (`_` in the symbol), USDC contracts and the two hidden coins are skipped. Delisted contracts are removed on each refresh.
 - The `!contractInfo` stream triggers a coin-list reload a few seconds after Binance adds or changes a contract.
 - `coinStats()` in the browser console shows how many contracts Binance returned vs. how many are shown.
+
+## Live price speed (WebSocket)
+
+Binance USDⓈ-M update speeds: `<symbol>@miniTicker` 2s, `<symbol>@kline_<tf>` 250ms, `<symbol>@aggTrade` 100ms (`bookTicker` is real-time but lives on the `/public` tier and carries bid/ask, not the last price).
+
+- Only the selected (chart) coin uses `@aggTrade` (100ms). Watchlist rows use `@miniTicker` (2s) to keep data use low; the selected coin's `@miniTicker` doubles as a cheap heartbeat.
+- The forming chart candle also follows each trade (coalesced to one chart update per animation frame); the 250ms kline still supplies volume and the official OHLC, and an older kline snapshot never moves the price backwards.
+- Connects to `wss://fstream.binance.com/market/stream`; falls back to the legacy `/stream` URL if the new one never delivers data twice in a row.
+- Binance limits: 10 incoming messages/s per connection (over the limit = disconnect, repeated = IP ban) and 1024 streams. SUBSCRIBE/UNSUBSCRIBE are batched (60 streams per message) and sent through a queue at most every 260 ms (~4/s); the unsent queue is rebuilt on every list scroll so it never grows.
+- A dead socket is replaced immediately instead of waiting for `onclose`.
+- A REST 24h list no longer overwrites a price that arrived over the socket in the last 5 s.
+- Tests: `tests/websocket-live.test.mjs`.
