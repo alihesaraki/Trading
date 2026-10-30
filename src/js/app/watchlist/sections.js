@@ -3,7 +3,23 @@
    group. secs = ordered headers [{id,n:name,c:collapsed}], secOf = coin -> section id (no entry = top group).
    Sections are shown only when no search / flag filter is active. */
 let secs = store.get('secs', []), secOf = store.get('secOf', {}), editing = null, rows = [];
-const saveSecs = () => { store.set('secs', secs); store.set('secOf', secOf); };
+let sectionScope = 'all';
+const scopeKey = () => flt || 'all';
+const saveSecs = () => {
+    const scope = sectionScope;
+    if (scope === 'all') { store.set('secs', secs); store.set('secOf', secOf); }
+    else { store.set('secs_' + scope, secs); store.set('secOf_' + scope, secOf); }
+};
+function syncSectionScope() {
+    const next = scopeKey();
+    if (next === sectionScope) return;
+    sectionScope = next;
+    if (next === 'all') { secs = store.get('secs', []); secOf = store.get('secOf', {}); }
+    else { secs = store.get('secs_' + next, []); secOf = store.get('secOf_' + next, {}); }
+    if (!Array.isArray(secs)) secs = [];
+    if (!secOf || typeof secOf !== 'object' || Array.isArray(secOf)) secOf = {};
+    editing = null;
+}
 const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 /* Section id a coin belongs to (0 = ungrouped top group) */
 const gidOf = sy => secs.some(x => x.id === secOf[sy]) ? secOf[sy] : 0;
@@ -82,29 +98,33 @@ function endEdit(inp, ok) {
     buildView();
     sched();
 }
-const secHtml = x => `<div class="row sec" data-sec="${x.sec}"><span class="sc">${x.closed ? '▸' : '▾'}</span>${editing === x.sec ? `<input class="sni" maxlength="40" value="${esc(x.name)}">` : `<span class="sn">${esc(x.name)}</span>`}<span class="sk">${x.n}</span></div>`;
+const secHtml = x => `<div class="row sec" data-sec="${x.sec}"><span class="sc" role="button" tabindex="0" aria-label="${x.closed ? 'Expand' : 'Collapse'} section">${x.closed ? '▸' : '▾'}</span>${editing === x.sec ? `<input class="sni" maxlength="40" value="${esc(x.name)}">` : `<span class="sn">${esc(x.name)}</span>`}<span class="sk">${x.n}</span></div>`;
 /* Shown name: the 1000 / 1000000 prefix of Binance's multiplied contracts is dropped (1000PEPE -> PEPE); long names get a smaller font. */
 const coinName = b => b.replace(/^10{3,}(?=[A-Z])/, '');
 const nmCls = b => { const n = coinName(b).length; return n > 8 ? ' xlong' : n > 5 ? ' long' : ''; };
-let ver = 0;
+let ver = 0, fullRows = [];
 /* Filter + sort the list, build grouped rows, set the scroll height, mark the sorted column header.
    view = selectable coins only (keyboard navigation); rows = coins + section headers (rendering) */
 function buildView() {
+    syncSectionScope();
     const q = query.trim().toUpperCase();
     const matches = all.filter(s => (!q || s.b.startsWith(q) || coinName(s.b).startsWith(q)) && (!flt || (flt === 'fav' ? !!favs[s.s] : flags[s.s] === flt)));
     // Search results prioritize the shortest matching ticker (e.g. S before SOL).
     const items = q
         ? matches.sort((a, b) => a.b.length - b.b.length || a.b.localeCompare(b.b) || a.s.localeCompare(b.s))
         : sortList(matches);
-    if (secs.length && !q && !flt) { /* top group first, then each section; collapsed sections hide their coins */
+    if (secs.length && !q) { /* each tab has its own independent section groups */
         const g = { 0: [] };
         secs.forEach(x => g[x.id] = []);
         for (const s of items)
             g[gidOf(s.s)].push(s);
         view = [...g[0]];
         rows = [...g[0]];
+        fullRows = [...g[0]];
         for (const x of secs) {
-            rows.push({ sec: x.id, name: x.n, closed: x.c, n: g[x.id].length });
+            const headerRow = { sec: x.id, name: x.n, closed: x.c, n: g[x.id].length };
+            fullRows.push(headerRow, ...g[x.id]);
+            rows.push(headerRow);
             if (!x.c) {
                 view.push(...g[x.id]);
                 rows.push(...g[x.id]);
@@ -114,6 +134,7 @@ function buildView() {
     else {
         view = items;
         rows = items;
+        fullRows = items;
     }
     ver++;
     $('msg').style.display = rows.length ? 'none' : 'block';
@@ -134,7 +155,7 @@ function render() {
     const key = a + '|' + b + '|' + ver + '|' + sym;
     if (key !== lastKey) { /* rows changed -> rebuild */
         lastKey = key;
-        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span><b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span>${flt ? `<button class="row-remove" data-remove="${s.s}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
         if (editing) {
             const i = $('in').querySelector('.sni');
             if (i) {
@@ -145,7 +166,7 @@ function render() {
     }
     else { /* same rows -> only patch changed texts */
         for (const r of $('in').children) {
-            const s = map[r.dataset.s], p = r.children[2], c = r.children[3];
+            const s = map[r.dataset.s], p = r.querySelector('.p'), c = r.querySelector('.c');
             if (!s)
                 continue;
             const t = fmt(s);
@@ -169,12 +190,18 @@ $('list').addEventListener('scroll', sched, { passive: true });
 $('list').onclick = e => {
     if (Date.now() < noClick)
         return; /* the click that ends a drag */
-    const h = e.target.closest('.sec');
-    if (h) {
-        if (!e.target.closest('input'))
-            toggleSec(h.dataset.sec);
+    const arrow = e.target.closest('.sec .sc');
+    if (arrow) {
+        toggleSec(arrow.closest('.sec').dataset.sec);
         return;
-    } /* section header: collapse / expand */
+    }
+    if (e.target.closest('.sec')) return;
+    const remove = e.target.closest('.row-remove');
+    if (remove) {
+        const k = remove.dataset.remove;
+        if (flt === 'fav') toggleFav(k); else setFlag(k, '');
+        return;
+    }
     const f = e.target.closest('.fl');
     if (f) {
         toggleFlag(f.dataset.f, f);
@@ -185,32 +212,34 @@ $('list').onclick = e => {
         select(r.dataset.s);
 };
 $('list').ondblclick = e => {
-    const h = e.target.closest('.sec');
-    if (h && !e.target.closest('input'))
-        renameSec(h.dataset.sec);
+    const name = e.target.closest('.sec .sn');
+    if (name)
+        renameSec(name.closest('.sec').dataset.sec);
 };
 $('list').addEventListener('focusout', e => {
     if (e.target.classList.contains('sni'))
         endEdit(e.target, true);
 });
 $('list').addEventListener('keydown', e => {
-    if (!e.target.classList.contains('sni'))
+    if (e.target.classList.contains('sc') && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        toggleSec(e.target.closest('.sec').dataset.sec);
         return;
-    if (e.key === 'Enter')
-        e.target.blur();
-    else if (e.key === 'Escape')
-        endEdit(e.target, false);
+    }
+    if (!e.target.classList.contains('sni')) return;
+    if (e.key === 'Enter') e.target.blur();
+    else if (e.key === 'Escape') endEdit(e.target, false);
 });
 /* Watchlist right-click: coin / empty space -> add section; section header -> rename / delete */
 $('list').oncontextmenu = e => {
     e.preventDefault();
     if (dg && dg.on)
         return;
-    const h = e.target.closest('.sec'), r = e.target.closest('.row:not(.sec)'), rst = ord.length ? [['Reset order (by volume)', resetOrder]] : [];
+    const h = e.target.closest('.sec'), r = e.target.closest('.row:not(.sec)');
     if (h)
-        showMenu(e.clientX, e.clientY, [['Rename section', () => renameSec(h.dataset.sec)], ['Delete section', () => delSection(h.dataset.sec)], ...rst]);
+        showMenu(e.clientX, e.clientY, [['Rename section', () => renameSec(h.dataset.sec)], ['Delete section', () => delSection(h.dataset.sec)]]);
     else
-        showMenu(e.clientX, e.clientY, [['Add section', () => addSection(r && r.dataset.s)], ...(r ? [[favs[r.dataset.s] ? 'Remove from favorite' : 'Add to favorite', () => toggleFav(r.dataset.s)]] : []), ...rst]);
+        showMenu(e.clientX, e.clientY, [['Add section', () => addSection(r && r.dataset.s)], ...(r ? [[favs[r.dataset.s] ? 'Remove from favorite' : 'Add to favorite', () => toggleFav(r.dataset.s)]] : [])]);
 };
 /* Header click: sort cycle (first direction <-> opposite; two states only) */
 $('cols').onclick = e => {

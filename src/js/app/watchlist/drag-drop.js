@@ -6,9 +6,10 @@ $('list').addEventListener('pointerdown', e => {
     if (dg || e.button || (e.pointerType === 'mouse' && e.buttons !== 1))
         return;
     const r = e.target.closest('.row');
-    if (!r || !r.dataset.s || e.target.closest('.fl,input'))
-        return;
-    dg = { s: r.dataset.s, x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, id: e.pointerId, on: false, touch: e.pointerType === 'touch', slot: -1, t: 0, raf: 0, dy: 0, g: null };
+    if (!r || e.target.closest('.fl,.row-remove,input,.sc')) return;
+    const isSection = r.classList.contains('sec');
+    if (!isSection && !r.dataset.s) return;
+    dg = { kind: isSection ? 'section' : 'coin', sec: isSection ? r.dataset.sec : '', s: isSection ? '' : r.dataset.s, x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, id: e.pointerId, on: false, touch: e.pointerType === 'touch', slot: -1, t: 0, raf: 0, dy: 0, g: null };
     if (dg.touch)
         dg.t = setTimeout(() => {
             if (dg && !dg.on)
@@ -33,13 +34,13 @@ function dgMove(e) {
     } /* touch moved early = the user is scrolling */
 }
 function dgStart() {
-    const d = dg, row = $('in').querySelector(`[data-s="${d.s}"]`);
+    const d = dg, row = d.kind === 'section' ? $('in').querySelector(`[data-sec="${d.sec}"]`) : $('in').querySelector(`[data-s="${d.s}"]`);
     if (!row) {
         dgStop(false);
         return;
     }
     d.on = true;
-    dragS = d.s;
+    if (d.kind === 'coin') dragS = d.s;
     const rc = row.getBoundingClientRect(), g = row.cloneNode(true);
     g.className = 'row gh';
     g.style.width = rc.width + 'px';
@@ -65,7 +66,7 @@ function dgUpd() {
     const s = clamp(Math.round(y / ROW), 0, rows.length), pv = rows[s - 1], nx = rows[s];
     d.slot = out ? -1 : s;
     const dl = $('dl');
-    dl.hidden = out || !!((pv && pv.s === d.s) || (nx && nx.s === d.s)); /* no line when it would stay where it is */
+    dl.hidden = out || (d.kind === 'coin' && !!((pv && pv.s === d.s) || (nx && nx.s === d.s))); /* no line when it would stay where it is */
     if (!dl.hidden)
         dl.style.transform = `translateY(${s * ROW}px)`;
 }
@@ -92,8 +93,10 @@ function dgStop(drop) {
     document.removeEventListener('pointercancel', dgEnd);
     if (!d.on)
         return;
-    if (drop && d.slot >= 0)
-        dropCoin(d.s, d.slot);
+    if (drop && d.slot >= 0) {
+        if (d.kind === 'section') dropSection(d.sec, d.slot);
+        else dropCoin(d.s, d.slot);
+    }
     d.g.remove();
     $('dl').hidden = true;
     document.body.classList.remove('dnd');
@@ -112,12 +115,42 @@ function dgEnd(e) {
     }
     dgStop(e.type === 'pointerup');
 }
+/* Move a section divider like TradingView: coins after the divider belong to it until the next divider. */
+function dropSection(id, slot) {
+    if (!fullRows.some(x => x.sec === id)) return;
+    const sequence = fullRows.filter(x => x.sec !== id);
+    const visibleTarget = rows[slot];
+    let target;
+    if (visibleTarget) {
+        target = sequence.findIndex(x => x.sec ? x.sec === visibleTarget.sec : x.s === visibleTarget.s);
+    } else {
+        if (slot >= rows.length) target = sequence.length;
+        else {
+            const prev = rows[slot - 1];
+            target = prev ? sequence.findIndex(x => x.sec ? x.sec === prev.sec : x.s === prev.s) + 1 : sequence.length;
+        }
+    }
+    if (target < 0) target = sequence.length;
+    sequence.splice(target, 0, { sec: id });
+    let active = 0;
+    for (const item of sequence) {
+        if (item.sec) active = item.sec;
+        else if (item.s) {
+            if (active) secOf[item.s] = active;
+            else delete secOf[item.s];
+        }
+    }
+    secs = sequence.filter(x => x.sec).map(x => secs.find(sec => sec.id === x.sec)).filter(Boolean);
+    saveSecs();
+    buildView();
+    sched();
+}
 /* Put coin `sy` at slot `s` of the current rows: updates the manual order and, with sections, its section */
 function dropCoin(sy, s) {
     const pv = rows[s - 1], nx = rows[s];
     if (!map[sy] || (pv && pv.s === sy) || (nx && nx.s === sy))
         return; /* dropped where it already is */
-    const grouped = secs.length && !query.trim() && !flt;
+    const grouped = secs.length && !query.trim();
     ord = sortList(all.slice()).map(x => x.s).filter(x => x !== sy); /* freeze the order currently shown (minus the moved coin) */
     let g = gidOf(sy), anchor = null, before = true;
     if (grouped)

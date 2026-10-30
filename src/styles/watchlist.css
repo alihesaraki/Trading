@@ -69,9 +69,6 @@ body.flip #side {
     color: var(--dn);
 }
 
-#flt .b {
-    color: var(--flag-blue);
-}
 
 /* Column header + rows share one grid so the columns always line up */
 #cols,
@@ -229,8 +226,7 @@ body.flip #side {
 }
 
 .fl.g,
-.fl.r,
-.fl.b {
+.fl.r {
     opacity: 1;
 }
 
@@ -242,9 +238,6 @@ body.flip #side {
     color: var(--dn);
 }
 
-.fl.b {
-    color: var(--flag-blue);
-}
 
 /* Flag color picker popup */
 #flpick {
@@ -286,53 +279,14 @@ body.flip #side {
     color: var(--dn);
 }
 
-#flpick .sw.b {
-    color: var(--flag-blue);
-}
-
-/* Section header row */
-.row.sec {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-    background: var(--pn);
-    color: var(--mu);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .05em;
-    text-align: left;
-    text-transform: uppercase;
-}
-
-.row.sec:hover {
-    background: var(--pn-hover);
-    color: var(--tx);
-}
-
-.sec .sc {
-    flex: none;
-    width: 12px;
-}
-
-.sec .sn {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.sec .sk {
-    font-weight: 600;
-    opacity: .6;
-}
-
-.sni {
-    flex: 1;
-    min-width: 0;
-    letter-spacing: 0;
-    text-transform: none;
-}
+#flpick 
+/* Section header: collapse arrow at the far left, name left, count at far right. */
+.row.sec { display:flex; align-items:center; gap:var(--sp-2); background:var(--pn); color:var(--mu); font-size:10px; font-weight:650; letter-spacing:.035em; text-align:left; text-transform:uppercase; cursor:grab; }
+.row.sec:hover { background:var(--pn-hover); color:var(--tx); }
+.sec .sc { flex:none; width:12px; order:0; cursor:pointer; text-align:left; user-select:none; }
+.sec .sn { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; order:1; }
+.sec .sk { flex:none; margin-left:auto; font-size:9px; font-weight:600; opacity:.65; order:2; }
+.sni { flex:1; min-width:0; letter-spacing:0; text-transform:none; font-size:10px; }
 
 /* Drag & drop reordering */
 .row.gh {
@@ -422,3 +376,35 @@ body.crs * {
     user-select: none;
 }
 
+
+/* Compact remove control pinned to the row's upper-right corner. */
+.row-remove {
+    position: absolute;
+    z-index: 2;
+    top: 2px;
+    right: 3px;
+    display: block;
+    width: 13px;
+    height: 13px;
+    padding: 0;
+    border: 1px solid var(--bd-strong);
+    border-radius: 50%;
+    background: var(--bg, #111);
+    color: var(--dn);
+    cursor: pointer;
+    font: 700 10px/11px Arial, sans-serif;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+}
+.row:hover .row-remove,
+.row-remove:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+    border-color: var(--dn);
+    background: var(--dn);
+    color: #fff;
+    outline: none;
+}
+
+#flpick .sw.star { color: #f5b301; }

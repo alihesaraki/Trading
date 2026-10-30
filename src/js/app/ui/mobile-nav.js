@@ -31,7 +31,7 @@ if (mnav) {
     });
     /* Picking a coin in the watchlist jumps to the chart (select() itself already ran) */
     $('list').addEventListener('click', e => {
-        if (!mobileNavOn() || Date.now() < noClick || e.target.closest('.sec,.fl,.sni'))
+        if (!mobileNavOn() || Date.now() < noClick || e.target.closest('.sec,.fl,.row-remove,.sni'))
             return;
         if (e.target.closest('.row')) {
             mView = 'chart';
