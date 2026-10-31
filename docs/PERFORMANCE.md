@@ -24,7 +24,7 @@ No before/after browser benchmark or profiling session was available. Therefore,
 ## Network data usage
 
 - Market caps (CoinGecko, ~600 KB) are cached in localStorage for 24h instead of downloaded on every page load.
-- The full `/ticker/24hr` list is refreshed every 3 min while the WebSocket is live (60s only when it is down); tab-switch/reconnect refreshes are throttled to one per 45s.
+- The full `/ticker/24hr` list is refreshed every 10 min while the WebSocket is live (60s only when it is down); tab-switch/reconnect refreshes are throttled to one per 45s.
 - After 30s in a background tab every WebSocket stream is unsubscribed; on return the chart catches up with a tiny `startTime` kline request.
 - Watchlist stream subscriptions are throttled (250ms) instead of debounced, so rows that scrolled out of view stop streaming.
 - Daily-open progress is saved while loading, and coins with no candle today are not re-requested every refresh.
@@ -40,7 +40,7 @@ No before/after browser benchmark or profiling session was available. Therefore,
 
 Binance USDⓈ-M update speeds: `<symbol>@miniTicker` 2s, `<symbol>@kline_<tf>` 250ms, `<symbol>@aggTrade` 100ms (`bookTicker` is real-time but lives on the `/public` tier and carries bid/ask, not the last price).
 
-- Only the selected (chart) coin uses `@aggTrade` (100ms). Watchlist rows use `@miniTicker` (2s) to keep data use low; the selected coin's `@miniTicker` doubles as a cheap heartbeat.
+- Only the selected (chart) coin uses `@aggTrade` (100ms). Watchlist rows use `@miniTicker`, subscribed in pulses (2.4s on / 2.6s off, so rows refresh about every 5s) because Binance's push rate cannot be slowed server-side; the chart coin's streams are never pulsed. The selected coin has no `@miniTicker`: its 250ms `@kline` stream is the heartbeat.
 - The forming chart candle also follows each trade (coalesced to one chart update per animation frame); the 250ms kline still supplies volume and the official OHLC, and an older kline snapshot never moves the price backwards.
 - Connects to `wss://fstream.binance.com/market/stream`; falls back to the legacy `/stream` URL if the new one never delivers data twice in a row.
 - Binance limits: 10 incoming messages/s per connection (over the limit = disconnect, repeated = IP ban) and 1024 streams. SUBSCRIBE/UNSUBSCRIBE are batched (60 streams per message) and sent through a queue at most every 260 ms (~4/s); the unsent queue is rebuilt on every list scroll so it never grows.

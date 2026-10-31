@@ -703,7 +703,7 @@ function fit() {
 const fitSoon = () => { fit(); requestAnimationFrame(fit); };
 
 const RESET_VISIBLE_BARS = 300;
-const RESET_RIGHT_OFFSET = 16; // Leave 12 empty bar slots to the right after Reset Chart.
+const RESET_RIGHT_OFFSET = 16; // Leave 16 empty bar slots to the right after Reset Chart.
 const RESET_SCALE_MARGIN = 0.15; // Keep 15% breathing room above and below price action.
 let resettingViewport = false;
 let resetHistoryJob = null;
@@ -811,6 +811,23 @@ function applyBar(b) {
 }
 /* ---------- Load candles for the current symbol / timeframe ---------- */
 let tok = 0; /* request token: stale responses are dropped */
+let loadTry = 0; /* consecutive failed loads of the current chart: drives the retry back-off */
+const LOAD_RETRY_BASE = 3000, LOAD_RETRY_MAX = 60000;
+function showLoadError(msg) {
+    const ld = $('ld');
+    ld.textContent = msg;
+    ld.style.display = 'block';
+}
+/* Retry a failed chart load with exponential back-off (3s, 6s, 12s ... max 60s) and tell the user what is happening.
+   A rate-limited request waits at least 30s so we do not make a Binance ban longer. */
+function retryLoad(my, msg, slow) {
+    const wait = Math.min(LOAD_RETRY_MAX, Math.max(slow ? 30000 : 0, LOAD_RETRY_BASE * 2 ** loadTry++));
+    showLoadError(`${msg} in ${Math.round(wait / 1000)}s…`);
+    setTimeout(() => {
+        if (my === tok)
+            loadChart(false, true);
+    }, wait);
+}
 async function loadChart(first, force) {
     const my = ++tok;
     ctl && ctl.abort();
@@ -856,21 +873,22 @@ async function loadChart(first, force) {
     }
     catch (e) {
         if (e.name !== 'AbortError' && my === tok)
-            setTimeout(() => {
-                if (my === tok)
-                    loadChart(false, true);
-            }, 3000);
+            retryLoad(my, 'Network error. Retrying');
         return;
-    } /* retry after 3s */
+    }
     if (my !== tok)
         return;
     if (!Array.isArray(k) || !k.length) {
-        setTimeout(() => {
-            if (my === tok)
-                loadChart(false, true);
-        }, 3000);
+        /* Binance error object ({code, msg}): a bad symbol will never succeed, a rate limit needs a longer wait */
+        const code = k && k.code;
+        if (code === -1121 || code === -1120)
+            showLoadError('This symbol is not available.');
+        else
+            retryLoad(my, code === -1003 || code === -1015 ? 'Rate limited by Binance. Retrying' : 'Could not load candles. Retrying', code === -1003 || code === -1015);
         return;
     }
+    loadTry = 0;
+    $('ld').textContent = 'Loading history…';
     data = k.map(candle);
     noMore = k.length < lim;
     loadingOld = false;
@@ -1260,6 +1278,8 @@ function resetState() {
     window.RP && RP.beforeSwitch(); /* un-hide replayed candles so the cache keeps the full list */
     stash();
     tok++;
+    loadTry = 0; /* new symbol / timeframe: start the retry back-off from the beginning */
+    $('ld').textContent = 'Loading history…';
     ctl && ctl.abort();
     setBars([]);
     fut.setData([]);
@@ -1743,7 +1763,7 @@ var RP = (function () {
 })();
 /* ---------- Watchlist ---------- */
 /* Price with thousands separators */
-const fmt = s => { const n = (+s.p).toFixed(+s.p > 10 ? 2 : s.dec), [i, d] = n.split('.'); return i.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (d ? '.' + d : ''); };
+const fmt = s => { const n = (+s.p).toFixed(+s.p > 10 ? Math.min(4, Math.max(2, s.dec)) : s.dec), [i, d] = n.split('.'); return i.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (d ? '.' + d : ''); };
 const FLAG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 2h2v2h11l-2.5 5 2.5 5H8v8H6z"/></svg>';
 let flags = store.get('flags', {}), flt = '';
 /* Flag colors: picked from a small palette popup (like TradingView), not cycled */
@@ -1923,7 +1943,6 @@ if (!Array.isArray(ord))
     ord = [];
 const reIx = () => { ordIx = new Map(ord.map((x, i) => [x, i])); };
 reIx();
-function resetOrder() { ord = []; reIx(); store.set('ord', ord); buildView(); sched(); }
 /* Sort a coin array in place by the active column (default: manual order, else 24h quote volume) */
 function sortList(a) {
     if (sortKey) {
@@ -2259,10 +2278,6 @@ document.addEventListener('keydown', e => {
 });
 /* Chart shortcuts: activate drawing tools immediately, with no extra toolbar click. */
 const isTypingTarget = t => !!(t && (t.isContentEditable || t.closest?.('input,textarea,select,[contenteditable="true"]')));
-function activateDrawingTool(type) {
-    if (window.DR?.ctl?.setTool)
-        window.DR.ctl.setTool(type);
-}
 function nextCoin() {
     if (!view.length)
         return;
@@ -2714,17 +2729,21 @@ async function refresh(first, force) {
    Binance routes streams by tier: aggTrade / kline / contractInfo are on /market. The legacy /stream URL is kept as a fallback. */
 const WS_URLS = [WSU_MARKET, WSU], WS_GAP = 260, WS_BATCH = 60;
 let ws, subs = new Set(), mid = 1, lastMsg = 0, hadWS = false, idle = false, idleT = 0, ciT = 0;
+/* Watchlist rows are streamed in pulses (ROW_ON ms on, ROW_OFF ms off): Binance pushes miniTicker every 2s no matter what, so the only way to
+   use less data is to stay subscribed for a shorter time. Rows refresh about every 5s; the selected coin's chart is never pulsed. */
+const ROW_ON = 2400, ROW_OFF = 2600;
+let rowsOn = true, rowT = 0;
 let wsUrl = 0, wsFail = 0, wsTries = 0, wsGot = false, wsQ = [], wsQT = 0, wsLast = 0, lastTr = null, trRaf = 0;
 /* Streams we need: the selected coin (trades + candle) and, while the tab is visible, the visible rows */
 function wanted() {
     const w = new Set(['!contractInfo']); /* Binance pushes a message whenever a contract is added / changed: reload the coin list right away */
     if (idle)
         return w; /* tab in the background for a while: no live data at all (it is caught up on return) */
-    if (!document.hidden)
-        vis.forEach(s => s.s && w.add(s.s.toLowerCase() + '@miniTicker')); /* watchlist rows: one small message every 2s per coin (low data use) */
+    if (!document.hidden && rowsOn)
+        vis.forEach(s => s.s && s.s !== sym && w.add(s.s.toLowerCase() + '@miniTicker')); /* watchlist rows: pulsed, ~1 small message per row every 5s */
     w.add(sym.toLowerCase() + '@aggTrade'); /* chart: every trade, 100ms */
     w.add(`${sym.toLowerCase()}@kline_${tf}`);
-    w.add(sym.toLowerCase() + '@miniTicker'); /* also a cheap heartbeat: a quiet coin is never mistaken for a dead socket */
+    /* no miniTicker for the selected coin: the 250ms kline stream is already the heartbeat */
     return w;
 }
 /* Control messages go through a small queue: one message per WS_GAP ms, so scrolling the list can never exceed Binance's 10 msg/s limit */
@@ -2778,6 +2797,13 @@ function wsReset() {
     wsQ.length = 0;
     connect();
 }
+function rowPulse() {
+    clearTimeout(rowT); /* never two pulse timers at once */
+    rowsOn = !rowsOn;
+    syncWS();
+    rowT = setTimeout(rowPulse, rowsOn ? ROW_ON : ROW_OFF);
+}
+rowT = setTimeout(rowPulse, ROW_ON);
 function connect() {
     ws = new WebSocket(WS_URLS[wsUrl]);
     wsGot = false;
@@ -2812,7 +2838,13 @@ function connect() {
         lastMsg = Date.now();
         wsGot = true;
         wsFail = wsTries = 0;
-        const m = JSON.parse(e.data), x = m.data;
+        let x;
+        try {
+            x = JSON.parse(e.data).data;
+        }
+        catch (_) {
+            return; /* malformed frame: ignore it, the next one is fine */
+        }
         if (!x)
             return;
         if (x.e === 'aggTrade') { /* selected coin only */
@@ -2918,12 +2950,12 @@ document.addEventListener('visibilitychange', () => {
 });
 addEventListener('online', () => { refresh(false, true); catchUp(true); });
 /* Full 24h list: every 60s only while the socket is down; with live streams running the visible rows already update
-   themselves, so a refresh every 3 minutes (volume ranking, new listings) is enough. */
+   themselves, so a refresh every 10 minutes (volume ranking, new listings) is enough. */
 setInterval(() => {
     if (document.hidden)
         return;
     const live = ws && ws.readyState === 1 && Date.now() - lastMsg < 12000;
-    if (Date.now() - lastRef >= (live ? 180000 : 60000))
+    if (Date.now() - lastRef >= (live ? 600000 : 60000))
         refresh(false, true);
 }, 15000);
 /* ---------- Start ---------- */

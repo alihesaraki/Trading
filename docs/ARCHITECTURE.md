@@ -2,7 +2,7 @@
 
 ## Runtime shape
 
-`index.html` loads the external Lightweight Charts 4.2.0 script, then `dist/app.js`, `dist/indicators.js`, and `dist/drawings.js`. These are classic scripts rather than ES modules. The order and shared global scope are intentional compatibility constraints.
+`index.html` (inline loader) loads Lightweight Charts 4.2.0 (local copy in `assets/vendor/`, CDN fallbacks), then `dist/app.js`, `dist/indicators.js`, and `dist/drawings.js`. These are classic scripts rather than ES modules. The order and shared global scope are intentional compatibility constraints.
 
 ## Source ownership
 

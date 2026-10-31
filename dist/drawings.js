@@ -1,6 +1,6 @@
 "use strict";
 (() => {
-  // types
+  // types: DEFAULT_STYLE, the base look every new drawing starts from (tools override parts of it)
   var DEFAULT_STYLE = {
     color: "#2962ff",
     width: 2,
@@ -13,7 +13,7 @@
     extR: false
   };
 
-  // math
+  // math: geometry + price/number helpers (distance to segment, point in polygon, adaptive price text ...)
   /* Adaptive price text. Never fewer decimals than the symbol's own (dec); small prices get up to 8 decimals,
      large prices only as many as keep the value readable. Zeros beyond the symbol's decimals are trimmed. */
   function fmtPrice(p, dec = 2) {
@@ -113,7 +113,7 @@
     ];
   }
 
-  // shared helpers for every tab
+  // tool-common: shared helpers for every tool file: F (settings-field presets), strokeOf / fillOf (style -> primitive props)
   var F = {
     color: { key: "style.color", label: "Color", type: "color" },
     width: { key: "style.width", label: "Line width", type: "number", min: 1, max: 8, step: 1 },
@@ -147,7 +147,7 @@
   var hLine = (c, y, x0, s) => ({ k: "line", a: { x: x0 == null ? c.plot.x : Math.max(c.plot.x, x0), y }, b: { x: c.plot.x + c.plot.w, y }, ...s });
   var lerpPt = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 
-  // finance (position sizing, time formatting)
+  // finance: long/short position maths (risk, reward, P&L, size) and time-span formatting
   function calcPosition(i) {
     const dir = i.side === "long" ? 1 : -1;
     const riskPerUnit = (i.entry - i.stop) * dir;
@@ -824,7 +824,7 @@
   var TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.type, t]));
   var GROUPS = TABS.map((t) => t.group);
 
-  // store
+  // store: DrawingStore = the list of drawings of ONE symbol, saved in localStorage ("dr:v1:<symbol>"), with undo/redo, copy/paste, z-order and per-tool remembered styles
   var VERSION = 1;
   var seq = 0;
   var newId = () => "d" + Date.now().toString(36) + (seq++).toString(36) + Math.random().toString(36).slice(2, 5);
@@ -1049,7 +1049,7 @@
     }
   };
 
-  // coords
+  // coords: time <-> x and price <-> y conversion (TimeAxis also covers the empty future area beyond the last candle)
   var TimeAxis = class {
     constructor(times, barSec) {
       this.times = times;
@@ -1241,7 +1241,7 @@
     return { time, price };
   }
 
-  // prims
+  // primitives: tools return plain "primitives" (line, poly, rect, ell, path, text); this file turns them into SVG (primToSvg) and hit-tests them (hitPrim)
   var esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   var num = (n) => Number.isFinite(n) ? +n.toFixed(2) : 0;
   var textWidth = (t, size, bold) => t.length * size * (bold ? 0.62 : 0.57);
@@ -1323,7 +1323,8 @@
     }
   }
 
-  // controller
+  // controller: the interaction engine. Pointer / keyboard handling, hit-testing, drag + resize handles, selection,
+  // drawing a new shape point by point, rendering all drawings into SVG layers, undo/redo hooks. Biggest file of the drawing layer.
   var HIT_TOL = 6;
   var HANDLE_R = 8;
   var HANDLE_TOUCH_R = 30;
@@ -2275,7 +2276,7 @@
     }
   };
 
-  // tools/icons
+  // icons: inline SVG icons for the drawing toolbar
   var d = (p) => `<path d="${p}" fill="none"/>`;
   var dot = (x, y) => `<circle cx="${x}" cy="${y}" r="1.8" fill="currentColor" stroke="none"/>`;
   var circ = (x, y) => `<circle cx="${x}" cy="${y}" r="2" fill="none"/>`;
@@ -2337,7 +2338,7 @@
     return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${IC[k] ?? IC.trend}</svg>`;
   };
 
-  // ui
+  // panel: drawing UI = left toolbar + flyouts, floating selection toolbar, settings dialog (Style / Coordinates tabs), colour pickers
   var el = (tag, cls = "", html = "") => {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -2394,9 +2395,13 @@
       host.append(this.bar, this.fly, this.fb, this.hint);
       for (const g of GROUPS) this.lastTool[g.id] = TOOLS.find((t) => t.group === g.id).type;
       this.buildBar();
-      document.addEventListener("pointerdown", (e) => {
-        if (!e.target.closest(".dr-fly,.dr-tb")) this.closeFly();
-      }, true);
+      // Stable outside-pointer handler scoped to this panel instance.
+      this.onDocumentPointerDown = (e) => {
+        const target = e.target;
+        if (target && (this.bar.contains(target) || this.fly.contains(target))) return;
+        this.closeFly();
+      };
+      document.addEventListener("pointerdown", this.onDocumentPointerDown, true);
       c.hooks.changed = () => this.refresh();
       c.hooks.editText = (d2) => this.editText(d2);
       c.hooks.openSettings = (d2) => this.openSettings(d2);
@@ -2404,14 +2409,17 @@
       store.on(() => this.refresh());
       window.addEventListener("indchange", () => this.refresh());
     }
-    btn(id, ic, title, fn, cls = "") {
+    btn(id, ic, title, fn, cls = "", eventType = "click") {
       const b = el("button", "dr-b " + cls, icon(ic));
       b.title = title;
       b.dataset.id = id;
-      b.onclick = (e) => {
+      b.addEventListener(eventType, (e) => {
+        // Handle toolbar group activation on pointerdown for immediate response,
+        // while retaining click for all other toolbar actions.
+        e.preventDefault();
         e.stopPropagation();
         fn();
-      };
+      }, { passive: false });
       this.btns.set(id, b);
       return b;
     }
@@ -2428,9 +2436,7 @@
         this.sep()
       );
       for (const g of GROUPS) {
-        const b = this.btn("g:" + g.id, g.icon, g.label, () => this.openFly(g.id, b), "dr-grp");
-        const caret = el("span", "dr-caret", "\u25B8");
-        b.appendChild(caret);
+        const b = this.btn("g:" + g.id, g.icon, g.label, () => this.openFly(g.id, b), "dr-grp", "pointerdown");
         b.oncontextmenu = (e) => {
           e.preventDefault();
           this.openFly(g.id, b);
@@ -2529,8 +2535,13 @@
       this.fly.style.top = Math.max(4, Math.min(r.top - h.top, h.height - this.fly.offsetHeight - 4)) + "px";
     }
     closeFly() {
+      // Idempotent: safe for outside clicks, selections and rapid repeated clicks.
       this.fly.hidden = true;
       this.flyGroup = "";
+    }
+    destroy() {
+      document.removeEventListener("pointerdown", this.onDocumentPointerDown, true);
+      this.closeFly();
     }
     /* ---------- refresh (toolbar state, floating bar, hint) ---------- */
     refresh() {
@@ -2542,9 +2553,7 @@
         const b = this.btns.get("g:" + g.id);
         const t = TOOL_MAP[this.lastTool[g.id]];
         b.classList.toggle("on", cur?.group === g.id);
-        const caret = b.querySelector(".dr-caret");
         b.innerHTML = icon(t.icon);
-        b.appendChild(caret);
         b.title = `${g.label}: ${t.label}`;
       }
       const items = this.store.items;
@@ -2970,7 +2979,7 @@
     }
   };
 
-  // index
+  // index: initDrawings() = entry point. Creates the DrawingStore, the Controller (canvas/SVG layer) and the toolbar Panel, then wires them to the chart bridge window.TVDR
   function initDrawings(b, host, chartEl) {
     const store = new DrawingStore(b.store);
     const mapper = new LwcMapper(b.chart, b.series, b.bars, chartEl, b.dec);
