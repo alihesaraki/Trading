@@ -4,23 +4,33 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Binance Futures Chart</title>
+<meta name="description" content="Real-time Binance USDT-M Futures chart with indicators, drawing tools, bar replay and a watchlist.">
 <meta name="theme-color" content="#131722">
 <link rel="icon" href="assets/images/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="assets/images/favicon-192.png">
 <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png">
 <link rel="preconnect" href="https://fapi.binance.com" crossorigin>
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preload" as="image" href="assets/images/long-position.png">
 <link rel="preload" as="image" href="assets/images/short-position.png">
 <link rel="stylesheet" href="dist/style.css">
+<!-- The loader at the end of <body> inserts these scripts one by one (to keep their order), so the browser is told to download them all in parallel now -->
+<link rel="preload" as="script" href="assets/vendor/lightweight-charts.standalone.production.js">
+<link rel="preload" as="script" href="dist/app.js">
+<link rel="preload" as="script" href="dist/indicators.js">
+<link rel="preload" as="script" href="dist/drawings.js">
 <script>
 // Start downloading data right away, before the chart library has loaded (faster first paint)
 var SYM0='BTCUSDT',TF0='1d';
+// Prefetch the coin / timeframe the user had open last time (same localStorage keys and validation as the app)
+try{
+  var s0=JSON.parse(localStorage.getItem('chartSelectedSymbol')),t0=JSON.parse(localStorage.getItem('chartSelectedTimeframe'));
+  if(typeof s0==='string'&&/^[^_\s]{2,30}USDT$/.test(s0)&&/^[A-Za-z0-9]+$/.test(s0))SYM0=s0;
+  if(['1m','5m','15m','1h','4h','1d','1w','1M'].indexOf(t0)>=0)TF0=t0;
+}catch(e){}
 var P_T=fetch('https://fapi.binance.com/fapi/v1/ticker/24hr').then(function(r){return r.json()}).catch(function(){return null});
 var P_K=fetch('https://fapi.binance.com/fapi/v1/klines?symbol='+SYM0+'&interval='+TF0+'&limit=300').then(function(r){return r.json()}).catch(function(){return null});
 </script>
-<script defer src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
 <!-- Left: chart area | Right: watchlist (resizable, can be moved to the other side) -->
@@ -55,8 +65,44 @@ var P_K=fetch('https://fapi.binance.com/fapi/v1/klines?symbol='+SYM0+'&interval=
   <button type="button" data-view="draw" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="17" r="2"/><circle cx="18" cy="7" r="2"/><path d="M7.5 15.5l9-7"/></svg><span>Draw</span></button>
 </nav>
 <div id="ctx" hidden></div>
-<script defer src="dist/app.js"></script>
-<script defer src="dist/indicators.js"></script>
-<script defer src="dist/drawings.js"></script>
+<div id="libErr" role="alert" hidden style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;text-align:center;background:#131722;color:#d1d4dc;font:14px/1.6 -apple-system,BlinkMacSystemFont,Roboto,sans-serif;z-index:99999">The chart library could not be loaded.<br>Check your network / VPN and reload the page.</div>
+<script>
+/* Loads Lightweight Charts, then the app bundles in order (they need the library at start-up).
+   Sources are tried in turn: the copy hosted with the site first, then public CDNs, so one blocked CDN no longer breaks the page. */
+(function () {
+  var LIB = [
+    'assets/vendor/lightweight-charts.standalone.production.js',
+    'https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.2.0/lightweight-charts.standalone.production.js',
+    'https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js'
+  ];
+  var APP = ['dist/app.js', 'dist/indicators.js', 'dist/drawings.js'];
+  function load(src, ok, fail) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.async = false;
+    s.onload = ok;
+    s.onerror = function () { s.remove(); fail(); };
+    document.head.appendChild(s);
+  }
+  function app(i) {
+    if (i >= APP.length) return;
+    load(APP[i], function () { app(i + 1); }, function () { showErr('Could not load ' + APP[i]); });
+  }
+  function showErr(msg) {
+    var e = document.getElementById('libErr');
+    if (!e) return;
+    if (msg) e.firstChild.nodeValue = msg;
+    e.hidden = false;
+    e.style.display = 'flex';
+  }
+  function lib(i) {
+    if (window.LightweightCharts) return app(0);
+    if (i >= LIB.length) return showErr();
+    load(LIB[i], function () { window.LightweightCharts ? app(0) : lib(i + 1); }, function () { lib(i + 1); });
+  }
+  lib(0);
+})();
+</script>
 </body>
 </html>

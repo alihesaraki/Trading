@@ -8,7 +8,7 @@ A Trading-style market chart UI for **Binance USDT-M Futures**, written in plain
 
 ## 1. What the app does
 
-- Candlestick chart via **Lightweight Charts 4.2.0** (loaded from the jsDelivr CDN).
+- Candlestick chart via **Lightweight Charts 4.2.0** (self-hosted in `assets/vendor/`, with CDN fallbacks).
 - Live data from Binance Futures: REST (`https://fapi.binance.com`) for history and 24h tickers, WebSocket (`wss://fstream.binance.com/market/stream`, legacy `/stream` as automatic fallback) for live prices (`aggTrade`, 100ms) and the forming candle (`kline`, 250ms + trade-driven updates). Market-cap ranking comes from CoinGecko.
 - Timeframes: `1m 5m 15m 1h 4h 1D 1W 1M`. Initial history load, older history on scroll-left, gap catch-up after disconnects, instant candle rollover.
 - Watchlist: search, All / Favorites (star tab, right-click → Add to favorite) / green/red flag filter, sections, drag & drop ordering, resizable columns, resizable panel that can be moved to the other side.
@@ -40,7 +40,7 @@ Consequences:
 2. **Order is a runtime contract.** Top-level `const`/`let`/`var` are used across files depending on position. Reordering can cause "Cannot access X before initialization" or silently change behaviour.
 3. **`scripts/manifest.mjs` is the single source of truth for order.** File names carry no numeric prefixes. A source file that is **not listed in the manifest is not bundled** (the code silently never runs).
 4. **Never edit `dist/*` by hand.** Edit `src/`, then run `npm run build`. `dist/` is committed so the site works on static hosting without a build step.
-5. `index.html` loads `dist/app.js` → `dist/indicators.js` → `dist/drawings.js`, all with `defer`, so they execute in that order after the Lightweight Charts script.
+5. `index.html` has a small inline **loader** at the end of `<body>`: it loads the Lightweight Charts library (first `assets/vendor/lightweight-charts.standalone.production.js`, then jsDelivr, cdnjs, unpkg) and only then `dist/app.js` → `dist/indicators.js` → `dist/drawings.js`, in that order (`async=false`). `<link rel="preload">` tags in `<head>` download all four files in parallel. If no library source works, the `#libErr` message is shown. The head also starts the first Binance requests early (`P_T`, `P_K`), using the symbol/timeframe saved in localStorage.
 
 ---
 
@@ -48,13 +48,13 @@ Consequences:
 
 ```text
 Trading/
-├── index.html                 # Entry page: DOM skeleton, early data fetch, loads CDN lib + dist/ bundles
+├── index.html                 # Entry page: DOM skeleton, early data fetch, script loader (library + dist/ bundles)
 ├── package.json               # npm scripts: build, test, check:syntax (no dependencies)
 ├── README.md                  # This file
 │
 ├── assets/
 │   └── images/                # favicon.ico, favicon-*.png, apple-touch-icon.png,
-│                              #   long-position.png, short-position.png, assets-position-*.png
+│                              #   long-position.png, short-position.png
 │
 ├── dist/                      # GENERATED – do not edit
 │   ├── app.js
@@ -244,8 +244,25 @@ Tests cannot replace a manual browser check for chart interaction, live candle u
 
 ## 10. External dependencies and caveats
 
-- Lightweight Charts **4.2.0** via CDN (pinned).
+- Lightweight Charts **4.2.0**, self-hosted in `assets/vendor/` (CDN fallbacks in `index.html`).
 - Binance Futures public REST/WebSocket and CoinGecko public API: availability, rate limits and CORS are outside the app's control. Watchdog logic handles dropped sockets and sleeping tabs.
 - Indicators and drawing tools are analysis aids only, not trading advice.
 
 More detail: `docs/ARCHITECTURE.md`, `docs/DRAWINGS.md`, `docs/PRICE_SCALE.md`, `docs/MOBILE_RESPONSIVE.md`, `docs/RSI_IMPLEMENTATION.md`, `docs/KEYBOARD_SHORTCUTS.md`, `docs/PERFORMANCE.md`, `docs/TECHNICAL_DEBT.md`.
+
+---
+
+## Credits and disclaimer
+
+- Charts are drawn with [TradingView Lightweight Charts™](https://www.tradingview.com/) v4.2.0 (Apache License 2.0), hosted in `assets/vendor/`. Keep the license header of that file.
+- Market data comes from Binance public APIs and CoinGecko. This project is independent and is not affiliated with or endorsed by Binance, CoinGecko or TradingView. Nothing here is financial advice.
+
+---
+
+## Recent changes (for anyone picking the project up again)
+
+- Chart library is self-hosted (`assets/vendor/`), loaded by the inline loader in `index.html` with CDN fallbacks; scripts are preloaded in parallel.
+- `loadChart()` retries with exponential back-off (3s → 60s), stops on an invalid symbol and waits longer when Binance rate-limits (`src/js/app/data/history.js`).
+- `index.html` prefetches the saved symbol/timeframe; WebSocket frames are parsed inside try/catch.
+- Removed dead code: `resetOrder`, `activateDrawingTool`, unused CSS rules and two unused images. The chart right-click menu is: Reset chart, Copy price, Setting.
+- Known, intentional limits: time zone is fixed to Asia/Tehran; `dist/*` is not minified.
