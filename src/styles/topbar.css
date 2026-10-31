@@ -1,0 +1,142 @@
+/* 3. Top bar --------------------------------------------------------------- */
+#main {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+
+#bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--sp-1);
+    min-width: 0;
+    height: 38px;
+    padding: 0 var(--sp-3);
+    border-bottom: 1px solid var(--bd);
+    background: var(--bg);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+#bar button {
+    padding: 6px 9px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    font-weight: 500;
+}
+
+#bar button:hover {
+    background: var(--pn-hover);
+}
+
+#tfs {
+    display: flex;
+    flex: 1 1 0;
+    gap: 2px;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+#tfs::-webkit-scrollbar {
+    display: none;
+}
+
+#tfs button,
+#btnType,
+#btnInd {
+    flex: none;
+}
+
+#btnType {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    color: var(--tx);
+}
+
+#btnType[aria-expanded="true"] { background: var(--pn-hover); }
+
+#btnInd {
+    min-width: max-content;
+}
+
+#tfs button.on {
+    background: var(--acc-bg);
+    color: #5b8cff;
+}
+
+#scaleModes {
+    position: absolute;
+    z-index: 12;
+    /* Sit in the footer corner where the time and price axes meet, not over candles. */
+    right: 0;
+    bottom: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    padding: 1px;
+    border: 1px solid var(--bd);
+    border-radius: 3px;
+    background: rgba(30, 34, 45, .94);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+}
+
+#scaleModes button {
+    min-width: 27px;
+    padding: 2px 4px;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--mu);
+    font-size: 9px;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: .01em;
+}
+
+#scaleModes button.on {
+    background: var(--acc-bg);
+    color: #7da2ff;
+}
+
+#scaleModes button:focus-visible {
+    outline: 2px solid var(--acc);
+    outline-offset: 1px;
+}
+
+#scaleWarning {
+    position: absolute;
+    z-index: 20;
+    top: 12px;
+    left: 50%;
+    max-width: min(520px, calc(100% - 24px));
+    transform: translateX(-50%);
+    padding: 9px 12px;
+    border: 1px solid #8b6a32;
+    border-radius: var(--r-md);
+    background: #2a2418;
+    color: #f0d49b;
+    font-size: 12px;
+    line-height: 1.4;
+    box-shadow: var(--shadow);
+}
+
+#scaleWarning[hidden] { display: none; }
+
+.sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 var(--sp-1);
+    background: var(--bd);
+}
+

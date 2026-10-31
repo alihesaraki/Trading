@@ -1,0 +1,307 @@
+/* 4. Chart overlays -------------------------------------------------------- */
+#cw {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+}
+
+#chart,
+#osep,
+#olb {
+    position: absolute;
+    inset: 0 0 0 var(--dtb);
+}
+
+#osep {
+    z-index: 4;
+    pointer-events: none;
+}
+
+#osep i {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--bd);
+}
+#osep i.osc-resize {
+    height: 10px;
+    margin-top: -5px;
+    border: 0;
+    pointer-events: auto;
+    cursor: row-resize;
+    touch-action: none;
+}
+#osep i.osc-resize::after {
+    content: ''; position: absolute; top: 4px; left: 0; right: 0; height: 2px;
+    background: var(--bd); opacity: .9;
+}
+body.resizing-oscillator { cursor: row-resize !important; user-select: none; }
+
+#olb {
+    z-index: 3;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.olb {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: none;
+    border-radius: 3px 0 0 3px;
+    color: #fff;
+    font: 600 11px/16px var(--font);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+/* Chart header (TradingView status line): symbol name + chart value + bar change */
+#tl {
+    position: absolute;
+    top: var(--sp-2);
+    left: calc(var(--dtb) + var(--sp-3));
+    z-index: 6;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--sp-2);
+    row-gap: 2px;
+    max-width: calc(100% - var(--dtb) - 90px);
+    line-height: 18px;
+    pointer-events: none;
+}
+
+#tl [hidden] { display: none; }
+
+#ttl {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#hv {
+    min-width: 0;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.hv-wrap {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 6px;
+}
+
+.hv-i { display: inline-flex; gap: 3px; }
+
+/* Indicator legend */
+#lg {
+    position: absolute;
+    top: var(--lg-top, 28px);
+    left: calc(var(--dtb) + var(--sp-3));
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 70%;
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.lh {
+    display: flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0;
+    border-radius: 4px;
+    background: transparent;
+    pointer-events: auto;
+}
+
+.lh button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 23px;
+    padding: 0;
+    border: 1px solid #383b46;
+    border-radius: 4px;
+    background: rgba(9, 11, 19, .82);
+    color: #d1d4dc;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.lh button:hover {
+    border-color: #626675;
+    color: #fff;
+}
+
+.lh button svg {
+    display: block;
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.lr {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    width: fit-content;
+    padding: 2px var(--sp-1);
+    border-radius: var(--r-sm);
+    background: rgba(19, 23, 34, .6);
+    pointer-events: auto;
+}
+
+.lr b {
+    font-weight: 600;
+}
+
+.lr.off b {
+    opacity: .4;
+    text-decoration: line-through;
+}
+
+.lv {
+    font-variant-numeric: tabular-nums;
+}
+
+.lb {
+    display: flex;
+    gap: 1px;
+    opacity: 1; /* hide / settings / remove buttons are always visible, not only on hover */
+}
+
+.lb button {
+    display: inline-grid;
+    place-items: center;
+    padding: 2px var(--sp-1);
+    border: 0;
+    border-radius: 3px;
+    background: none;
+    color: var(--mu);
+    font-size: 12px;
+}
+
+.lb button:hover {
+    background: var(--pn-hover);
+    color: var(--tx);
+}
+
+/* Candle countdown tag on the price axis */
+#cd {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 5;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1px;
+    width: 0;
+    min-width: 0;
+    max-width: 100%;
+    padding: 3px 2px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-sm);
+    background: rgba(30, 34, 45, .94);
+    color: var(--tx);
+    font: 600 12px/15px var(--font);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+#cdPrice,
+#cdTime {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+
+#cdPrice {
+    font-weight: 700;
+}
+
+#cdTime {
+    padding-top: 1px;
+    border-top: 1px solid rgba(120, 123, 134, .24);
+    font-size: 11px;
+    line-height: 14px;
+    opacity: .9;
+}
+
+/* Loading badge */
+#ld {
+    position: absolute;
+    bottom: 40px;
+    left: 54px;
+    z-index: 5;
+    display: none;
+    padding: 5px 9px;
+    border-radius: var(--r-sm);
+    background: var(--pn);
+    color: var(--mu);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+/* Reset chart / jump to latest */
+#jumpNow {
+    position: absolute;
+    right: 64px;
+    bottom: 10px;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-md);
+    background: rgba(30, 34, 45, .9);
+    color: var(--ico);
+    box-shadow: var(--shadow);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .15s, border-color .15s, color .15s;
+}
+
+#jumpNow svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+#jumpNow:hover,
+#jumpNow:focus-visible {
+    border-color: var(--acc);
+    background: var(--pn-hover);
+    color: #fff;
+}
+
+#jumpNow:active {
+    transform: scale(.94);
+}
+

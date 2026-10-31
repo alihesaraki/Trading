@@ -1,0 +1,45 @@
+/* 10. Responsive ----------------------------------------------------------- */
+@media (hover: none) {
+    .fl { opacity: .55; }
+    .lb { opacity: 1; }
+}
+
+
+/* Crosshair price / oscillator label on the right axis */
+.chl { position: absolute; right: 0; z-index: 6; height: 18px; box-sizing: border-box; padding: 0 4px; background: #2a2e39; color: #fff; font: 600 11px/18px var(--font); font-variant-numeric: tabular-nums; text-align: center; pointer-events: none; }
+.chl[hidden] { display: none; }
+
+/* Hides the main price axis inside oscillator panes (RSI / DMI draw their own labels there) */
+.axmask { position: absolute; right: 0; z-index: 2; box-sizing: border-box; border-left: 1px solid #2a2e39; background: var(--chart-bg, var(--bg)); pointer-events: none; }
+.axmask[hidden] { display: none; }
+.olb.olb-level { background: #787B86; }
+
+/* Update 2: compact, single-line indicator settings and draggable settings headers. */
+#iset { width: min(336px, calc(100% - 24px)); gap: 6px; padding: 10px 12px; }
+#iset > label { grid-template-columns: minmax(0, 1fr) 104px; gap: 6px; white-space: nowrap; font-size: 10.5px; }
+#iset > label > input, #iset > label > select { min-width: 0; max-width: 104px; font-size: 10.5px; }
+#iset input[type=number], #iset select { width: 104px; font-size: 10.5px; }
+.ih { cursor: move; user-select: none; }
+.ih button { cursor: pointer; }
+
+
+/* Update 4: one-click watchlist collapse/restore. On phones, give the chart
+   the full viewport when the lower watchlist panel is collapsed. */
+/* Update 7: watchlist toggle = last button of the header (icon lights up while the list is shown). */
+#btnWatch {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    min-width: 32px;
+    margin-left: 4px;
+    color: var(--mu);
+}
+#btnWatch[aria-pressed="true"] { color: #8eafff; background: var(--acc-bg); }
+#btnWatch:hover { color: var(--tx); }
+
+/* Timeframe picker button: phones only (laptop keeps the full timeframe strip). */
+#btnTf, #tfmenu { display: none; }
+body.watchlist-hidden #side {
+    display: none !important;
+}
+

@@ -1,0 +1,57 @@
+/* 7. Form controls --------------------------------------------------------- */
+#q,
+.sni,
+.ihex,
+#iset input[type=number],
+#iset select,
+.dr-fb select,
+.dr-row input[type=number],
+.dr-row input[type=text],
+.dr-row input[type=datetime-local],
+.dr-row select,
+.dr-row textarea {
+    padding: 5px 8px;
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-sm);
+    background: var(--bg);
+    outline: 0;
+}
+
+#q:focus,
+.sni,
+.ihex:focus,
+#iset input:focus,
+#iset select:focus,
+.dr-fb select:focus,
+.dr-row input:focus,
+.dr-row select:focus,
+.dr-row textarea:focus {
+    border-color: var(--acc);
+}
+
+#q {
+    width: 110px;
+}
+
+ #iset input[type=number],
+#iset select {
+    width: 112px;
+    min-width: 0;
+    font-size: 11px;
+}
+
+#iset input[type=checkbox],
+.dr-row input[type=checkbox] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--acc);
+}
+
+input[type=color] {
+    width: 42px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: none;
+}
+

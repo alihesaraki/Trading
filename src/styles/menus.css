@@ -1,0 +1,191 @@
+/* 6. Menus & popovers ------------------------------------------------------ */
+#imenu,
+#ctx,
+#pop,
+#typemenu,
+#iset,
+.dr-fly,
+.dr-fb,
+.dr-set,
+.dr-menu {
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-lg);
+    background: var(--pn);
+    box-shadow: var(--shadow);
+}
+
+#imenu,
+#typemenu,
+#ctx,
+.dr-fly,
+.dr-menu {
+    display: flex;
+    flex-direction: column;
+    padding: var(--sp-1);
+}
+
+/* Shared menu item */
+#imenu button,
+#typemenu button,
+#ctx button,
+.dr-fly button,
+.dr-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px var(--sp-3);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    text-align: left;
+    white-space: nowrap;
+}
+
+#imenu button:hover,
+#typemenu button:hover,
+#ctx button:hover,
+.dr-fly button:hover,
+.dr-menu button:hover {
+    background: var(--pn-hover);
+}
+
+#imenu {
+    position: absolute;
+    top: 42px;
+    left: var(--sp-2);
+    z-index: 20;
+    width: max-content;
+    max-width: calc(100% - 16px);
+    max-height: min(70vh, 520px);
+    max-height: min(70dvh, 520px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+#ctx {
+    position: fixed;
+    z-index: 60;
+    min-width: 170px;
+}
+
+.dr-menu {
+    position: fixed;
+    z-index: 60;
+}
+
+.dr-fly {
+    position: absolute;
+    z-index: 30;
+    min-width: 250px;
+    max-height: 70%;
+    overflow: auto;
+}
+
+.dr-fh {
+    padding: 6px var(--sp-3);
+    color: var(--mu);
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.dr-fly span {
+    flex: 1;
+}
+
+.dr-fly em {
+    margin-left: auto;
+    color: var(--mu);
+    font-size: 11px;
+    font-style: normal;
+}
+
+/* Indicator settings panel */
+#iset {
+    position: absolute;
+    top: 40px;
+    left: 54px;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    width: min(320px, calc(100% - 24px));
+    max-height: min(70vh, 520px);
+    max-height: min(70dvh, 520px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 10px;
+}
+
+#iset .ipane > label {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    white-space: nowrap;
+    font-size: 11px;
+}
+
+#iset .ipane > label > input,
+#iset .ipane > label > select {
+    justify-self: end;
+}
+
+ .ih {
+    cursor: move;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.if {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.ih button,
+.if button {
+    padding: 5px 10px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: var(--pn-hover);
+}
+
+.ih button:hover,
+.if button:hover {
+    background: var(--bd-strong);
+}
+
+
+/* Indicator settings: Inputs / Style tabs (TradingView) */
+.itabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--bd);
+}
+
+.itabs button {
+    padding: 7px 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--mu);
+    font-weight: 500;
+}
+
+.itabs button:hover { color: var(--tx); }
+.itabs button.on { border-bottom-color: var(--acc); color: var(--tx); }
+
+.ipane {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.ipane[hidden] { display: none; }
