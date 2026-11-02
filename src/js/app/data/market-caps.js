@@ -26,4 +26,5 @@ async function loadMarketCaps() {
     }
     catch (_) { }
 }
-loadMarketCaps();
+if (!PANE)
+    loadMarketCaps();

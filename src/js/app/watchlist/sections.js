@@ -143,6 +143,8 @@ function buildView() {
 }
 /* Virtualized list: only the visible rows (+2 buffer) exist in the DOM */
 let raf = 0, vis = [], lastKey = '';
+/* the coin highlighted in the list: the selected coin of the active chart (multi-chart) */
+const actSym = () => (window.MC && MC.activeSym()) || sym;
 const sched = () => { raf || (raf = requestAnimationFrame(render)); };
 const cTxt = s => s.o ? `${s.c >= 0 ? '' : '−'}${Math.abs(s.c).toFixed(2)}%` : '–';
 const cCls = s => s.o ? (s.c >= 0 ? 'g' : 'r') : '';
@@ -151,10 +153,10 @@ function render() {
     const l = $('list'), a = Math.max(0, Math.floor(l.scrollTop / ROW) - 2), b = Math.min(rows.length, Math.ceil((l.scrollTop + l.clientHeight) / ROW) + 2);
     vis = rows.slice(a, b);
     $('in').style.transform = `translateY(${a * ROW}px)`;
-    const key = a + '|' + b + '|' + ver + '|' + sym;
+    const key = a + '|' + b + '|' + ver + '|' + actSym();
     if (key !== lastKey) { /* rows changed -> rebuild */
         lastKey = key;
-        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span>${flt ? `<button class="row-remove" data-remove="${s.s}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === actSym() ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span>${flt ? `<button class="row-remove" data-remove="${s.s}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
         if (editing) {
             const i = $('in').querySelector('.sni');
             if (i) {
@@ -331,6 +333,10 @@ function select(s, kb) {
             sched();
         }
     }
+    if (window.MC && MC.routeSelect(s, kb)) { /* multi-chart: the coin goes to the active chart */
+        sched();
+        return;
+    }
     if (s === sym)
         return;
     sym = s;
@@ -350,7 +356,7 @@ document.addEventListener('keydown', e => {
     if ((tag === 'INPUT' && t.id !== 'q') || tag === 'SELECT' || tag === 'TEXTAREA' || !view.length)
         return;
     e.preventDefault();
-    const i = view.findIndex(s => s.s === sym), d = e.key === 'ArrowDown' ? 1 : -1;
+    const i = view.findIndex(s => s.s === actSym()), d = e.key === 'ArrowDown' ? 1 : -1;
     const n = i < 0 ? (d > 0 ? 0 : view.length - 1) : Math.min(view.length - 1, Math.max(0, i + d));
     if (n === i)
         return;
@@ -367,7 +373,7 @@ const isTypingTarget = t => !!(t && (t.isContentEditable || t.closest?.('input,t
 function nextCoin() {
     if (!view.length)
         return;
-    const i = view.findIndex(s => s.s === sym), n = i < 0 ? 0 : (i + 1) % view.length;
+    const i = view.findIndex(s => s.s === actSym()), n = i < 0 ? 0 : (i + 1) % view.length;
     select(view[n].s, true);
     const l = $('list'), top = rows.indexOf(view[n]) * ROW;
     if (top < l.scrollTop)

@@ -573,17 +573,39 @@ var IND = (function () {
     /* Restore saved indicators */
     const migrate = store.get('indsV', 0) < 2; /* one-time: line width defaults to 1 for every indicator */
     store.set('indsV', 2);
-    store.get('inds', []).filter(x => M(x.t)).forEach(x => {
-        const ind = { t: x.t, p: Object.assign({}, M(x.t).defaults, x.p), v: x.v !== false };
-        /* DMI: earlier default colours (green / red / blue) -> TradingView's (blue / orange / red) */
-        if (x.t === 'dmi' && (ind.p.ca === '#ff9800' || (ind.p.cp === '#26a69a' && ind.p.cm === '#ef5350' && /^#2962ff$/i.test(ind.p.ca)))) Object.assign(ind.p, { cp: '#2962FF', cm: '#FF6D00', ca: '#F23645' });
-        if (migrate && 'w' in ind.p)
-            ind.p.w = 1;
-        create(ind);
-        inds.push(ind);
+    function restore(migrating) {
+        store.get('inds', []).filter(x => M(x.t)).forEach(x => {
+            const ind = { t: x.t, p: Object.assign({}, M(x.t).defaults, x.p), v: x.v !== false };
+            /* DMI: earlier default colours (green / red / blue) -> TradingView's (blue / orange / red) */
+            if (x.t === 'dmi' && (ind.p.ca === '#ff9800' || (ind.p.cp === '#26a69a' && ind.p.cm === '#ef5350' && /^#2962ff$/i.test(ind.p.ca)))) Object.assign(ind.p, { cp: '#2962FF', cm: '#FF6D00', ca: '#F23645' });
+            if (migrating && 'w' in ind.p)
+                ind.p.w = 1;
+            create(ind);
+            inds.push(ind);
+        });
+        margins();
+        legend();
+    }
+    restore(migrate);
+    /* Multi-chart: the indicator list is shared by every chart. Another chart (another page of the same app) saved a change -> rebuild this chart's
+       indicators from storage. Nothing is saved here, so the charts can never ping-pong. */
+    function reload() {
+        inds.forEach(i => { i.s.forEach(s => chart.removeSeries(s)); M(i.t).destroy && M(i.t).destroy(i); if (i.pln) i.pln = null; });
+        inds = [];
+        $('iset').hidden = true;
+        setId = 0;
+        restore(false);
+        markers(true);
+        if (data.length)
+            full();
+    }
+    let relT = 0;
+    addEventListener('storage', e => {
+        if (e.key !== 'inds')
+            return;
+        clearTimeout(relT);
+        relT = setTimeout(reload, 60); /* a settings slider saves on every move: rebuild once it settles */
     });
-    margins();
-    legend();
     /* Remove every indicator at once (no confirmation) */
     function removeAll() {
         inds.forEach(i => { i.s.forEach(s => chart.removeSeries(s)); M(i.t).destroy && M(i.t).destroy(i); });
@@ -604,5 +626,5 @@ var IND = (function () {
     }
     const count = () => inds.length;
     const allHidden = () => inds.length > 0 && inds.every(i => !i.v);
-    return { setMainMargins, full, tick, clear, colors, frame, removeAll, need, setVisible, count, allHidden };
+    return { setMainMargins, full, tick, clear, colors, frame, removeAll, need, setVisible, count, allHidden, reload };
 })();

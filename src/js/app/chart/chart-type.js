@@ -153,6 +153,19 @@ function setChartType(id) {
     window.dispatchEvent(new Event('charttypechange'));
 }
 
+/* Multi-chart: the chart type chosen in the main page's top bar is shared, so the other charts (iframes) follow it */
+addEventListener('storage', e => {
+    if (e.key !== 'chartType')
+        return;
+    const id = store.get('chartType', 'candles');
+    if (id !== chartType && CHART_TYPES.some(t => t[0] === id)) {
+        chartType = id;
+        restyleChart();
+        syncTypeUi();
+        window.dispatchEvent(new Event('charttypechange'));
+    }
+});
+
 /* ---------- Toolbar button + menu (next to Indicators) ---------- */
 const btnType = $('btnType'), typeMenu = $('typemenu');
 function syncTypeUi() {

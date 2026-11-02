@@ -7,6 +7,9 @@ const API = 'https://fapi.binance.com', WSU = 'wss://fstream.binance.com/stream'
 const TFS = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1D': '1d', '1W': '1w', '1M': '1M' };
 const TFMS = { '1m': 6e4, '5m': 3e5, '15m': 9e5, '1h': 36e5, '4h': 144e5, '1d': 864e5, '1w': 6048e5, '1M': 26784e5 };
 const $ = id => document.getElementById(id);
+/* Multi-chart: every chart added next to the main one is this same app running inside an iframe (index.html?pane=N, N = 1..3).
+   A pane has no watchlist / top bar of its own: it gets its coin list from the main page and is driven by it (see ui/pane-mode.js). */
+const PANE = +((/[?&]pane=([1-3])(?:&|$)/.exec(location.search) || [])[1] || 0);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 /* localStorage wrapper that never throws */
 const store = { get(k, d) {

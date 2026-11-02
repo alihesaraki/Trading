@@ -1,12 +1,13 @@
 /* ---------- State ---------- */
-const SAVED_SYMBOL_KEY = 'chartSelectedSymbol';
+const SAVED_SYMBOL_KEY = 'chartSelectedSymbol' + (PANE ? '.p' + PANE : ''); /* each pane remembers its own coin */
 const SAVED_TIMEFRAME_KEY = 'chartSelectedTimeframe';
 const validTimeframes = new Set(Object.values(TFS));
-const savedSymbol = store.get(SAVED_SYMBOL_KEY, 'BTCUSDT');
+const savedSymbol = store.get(SAVED_SYMBOL_KEY, ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'][PANE]);
 const savedTimeframe = store.get(SAVED_TIMEFRAME_KEY, '1d');
 let sym = typeof savedSymbol === 'string' && /^[^_\s]{2,30}USDT$/.test(savedSymbol) ? savedSymbol : 'BTCUSDT', tf = validTimeframes.has(savedTimeframe) ? savedTimeframe : '1d', all = [], map = {}, view = [], sortKey = 's', sortDir = -1, query = '';
 store.set(SAVED_SYMBOL_KEY, sym);
-store.set(SAVED_TIMEFRAME_KEY, tf);
+if (!PANE)
+    store.set(SAVED_TIMEFRAME_KEY, tf); /* the timeframe belongs to the main page; panes only follow it */
 let data = [], noMore = false, loadingOld = false, lastClose = null, lastUp = true, closeAt = 0, skew = 0, skewOk = false, cdCol = '';
 /* pend: live candle that arrived before history finished loading; curKey: sym|tf of the data on screen;
    ctl: AbortController of in-flight chart requests; cuBusy/cuT: catch-up lock and last run time */

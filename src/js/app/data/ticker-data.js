@@ -52,6 +52,8 @@ function ingest(arr) {
 }
 let lastRef = 0;
 async function refresh(first, force) {
+    if (PANE)
+        return paneRefresh(); /* panes take the coin table from the main page: no second 24h download */
     /* the full 24h list is ~0.5k symbols; skip it if one was fetched moments ago (tab switches, reconnects) */
     if (!first && !force && Date.now() - lastRef < 45000)
         return;

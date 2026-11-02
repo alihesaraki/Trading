@@ -7,7 +7,7 @@ const OP_WORKERS = 24; /* parallel kline requests (HTTP/2): ~500 coins load in a
 let opens = (() => { const o = store.get('dopen', {}); return o.day === dayMs ? o.m : {}; })();
 const calc = s => s.o ? (+s.p - s.o) / s.o * 100 : 0;
 async function loadOpens() {
-    if (opBusy)
+    if (PANE || opBusy)
         return;
     opBusy = true;
     const day = dayMs, shown = new Set(vis.map(s => s.s)), todo = all.filter(s => !s.o && s.nk !== day).sort((a, b) => (shown.has(b.s) - shown.has(a.s)) || b.qv - a.qv); /* rows on screen first, then busiest coins */
@@ -59,6 +59,8 @@ async function loadOpens() {
 }
 /* New UTC day: drop yesterday's opens and fetch fresh ones */
 function checkDay() {
+    if (PANE)
+        return;
     const d = dayStart();
     if (d === dayMs)
         return;

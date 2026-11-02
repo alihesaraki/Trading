@@ -13,12 +13,13 @@ let rowsOn = true, rowT = 0;
 let wsUrl = 0, wsFail = 0, wsTries = 0, wsGot = false, wsQ = [], wsQT = 0, wsLast = 0, lastTr = null, trRaf = 0;
 /* Streams we need: the selected coin (trades + candle) and, while the tab is visible, the visible rows */
 function wanted() {
-    const w = new Set(['!contractInfo']); /* Binance pushes a message whenever a contract is added / changed: reload the coin list right away */
+    const w = new Set(PANE ? [] : ['!contractInfo']); /* Binance pushes a message whenever a contract is added / changed: reload the coin list right away (the main page does it for the panes) */
     if (idle)
         return w; /* tab in the background for a while: no live data at all (it is caught up on return) */
-    if (!document.hidden && rowsOn)
+    if (!PANE && !document.hidden && rowsOn)
         vis.forEach(s => s.s && s.s !== sym && w.add(s.s.toLowerCase() + '@miniTicker')); /* watchlist rows: pulsed, ~1 small message per row every 5s */
-    w.add(sym.toLowerCase() + '@aggTrade'); /* chart: every trade, 100ms */
+    if (!window.mcInactive)
+        w.add(sym.toLowerCase() + '@aggTrade'); /* chart: every trade, 100ms. Multi-chart: only the active chart; the others follow the 250ms kline stream (less data) */
     w.add(`${sym.toLowerCase()}@kline_${tf}`);
     /* no miniTicker for the selected coin: the 250ms kline stream is already the heartbeat */
     return w;

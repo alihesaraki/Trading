@@ -13,7 +13,8 @@ function closeTfMenu() { tfMenu.hidden = true; btnTf.setAttribute('aria-expanded
 function pickTf(t) {
     if (!t || TFS[t] === tf) return;
     tf = TFS[t];
-    store.set(SAVED_TIMEFRAME_KEY, tf);
+    if (!PANE)
+        store.set(SAVED_TIMEFRAME_KEY, tf); /* writing it is what tells the panes (storage event) to follow */
     syncTfUi();
     // Keep the active timeframe visible in the horizontally scrollable toolbar.
     $('tfs').querySelector('button.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });

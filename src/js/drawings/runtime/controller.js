@@ -216,7 +216,10 @@
         this.hooks.menu?.(e.clientX, e.clientY, this.menuItems(d2));
       };
       /* Arrow keys nudge the selected drawings: left/right = one bar, up/down = a few pixels of price. */
+      /* multi-chart: while another chart is active this (main page) controller must not react to the keyboard */
+      this.keysOff = () => false;
       this.onArrow = (e) => {
+        if (this.keysOff()) return;
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
         if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || this.tool || this.draft || this.gesture) return;
         const t = e.target;
@@ -246,9 +249,11 @@
       };
       /* Pressing / releasing Shift while a line is being drawn re-evaluates the straight-line snap without a mouse move. */
       this.onShift = (e) => {
+        if (this.keysOff()) return;
         if (e.key === "Shift" && this.draft && !this.draft.free && this.lastPointer) this.updatePreview(this.lastPointer, { shiftKey: e.type === "keydown" });
       };
       this.onKey = (e) => {
+        if (this.keysOff()) return;
         const t = e.target;
         if (t && (t.isContentEditable || t.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]'))) return;
         const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
@@ -350,6 +355,7 @@
       };
       /* Hold Ctrl = temporary Brush (left button draws); releasing Ctrl restores the previous tool / mode. */
       this.onCtrlDown = (e) => {
+        if (this.keysOff()) return;
         if (e.key !== "Control" || e.repeat) return;
         const t = e.target;
         if (t && (t.isContentEditable || t.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]'))) return;
