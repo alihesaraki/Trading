@@ -20,7 +20,7 @@ function setup({ failOpen = false } = {}) {
     WSU: 'wss://fstream.binance.com/stream', WSU_MARKET: 'wss://fstream.binance.com/market/stream',
     WebSocket: FakeWS, document: { hidden: false }, console, Date, Math, JSON, Object, Set, setTimeout, clearTimeout,
     requestAnimationFrame: f => setTimeout(f, 0),
-    vis: [{ s: 'ETHUSDT' }, { s: 'SOLUSDT' }], sym: 'ETHUSDT', tf: '1m',
+    PANE: 0, vis: [{ s: 'ETHUSDT' }, { s: 'SOLUSDT' }], sym: 'ETHUSDT', tf: '1m',
     map: { ETHUSDT: { p: '100.00', d: '', dec: 2, o: 90 }, SOLUSDT: { p: '10.00', d: '', dec: 2, o: 9 } },
     calc: s => (+s.p - s.o) / s.o * 100, sched() {}, bar: k => ({ time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c, v: +k.v, T: k.T }),
     applyBar: b => { ctx.data[ctx.data.length - 1] = b; applied.push(b); },
@@ -113,5 +113,21 @@ test('watchlist rows are streamed in pulses: subscribed in the on-phase, dropped
   t.run('rowPulse()'); /* on-phase again */
   await wait(700);
   assert.ok(t.run('subs.has(\"solusdt@miniTicker\")'));
+  t.stop();
+});
+
+test('multi-chart: an inactive chart drops the 100ms trade stream but keeps its kline; a pane never subscribes the coin list or rows', async () => {
+  const t = setup();
+  await wait(50);
+  t.run('window.mcInactive = true; syncWS();');
+  await wait(700);
+  assert.ok(!t.run('subs.has("ethusdt@aggTrade")'), 'trade stream dropped');
+  assert.ok(t.run('subs.has("ethusdt@kline_1m")'), 'kline stays (250ms, the chart keeps moving)');
+  t.run('window.mcInactive = false; syncWS();');
+  await wait(700);
+  assert.ok(t.run('subs.has("ethusdt@aggTrade")'), 'trade stream back when the chart is active again');
+  t.run('PANE = 1; syncWS();');
+  await wait(700);
+  assert.ok(!t.run('subs.has("!contractInfo")') && !t.run('subs.has("solusdt@miniTicker")'), 'pane: no coin-list / watchlist streams');
   t.stop();
 });

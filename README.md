@@ -266,3 +266,5 @@ More detail: `docs/ARCHITECTURE.md`, `docs/DRAWINGS.md`, `docs/PRICE_SCALE.md`, 
 - `index.html` prefetches the saved symbol/timeframe; WebSocket frames are parsed inside try/catch.
 - Removed dead code: `resetOrder`, `activateDrawingTool`, unused CSS rules and two unused images. The chart right-click menu is: Reset chart, Copy price, Setting.
 - Known, intentional limits: time zone is fixed to Asia/Tehran; `dist/*` is not minified.
+
+- **Multi-chart**: up to 4 charts side by side (button next to Indicators). One timeframe, one indicator list, one left drawing toolbar that acts on the active chart; the watchlist picks the coin of the active chart. See `docs/ARCHITECTURE.md` (Multi-chart) and `npm run test:e2e`.

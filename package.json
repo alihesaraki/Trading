@@ -5,6 +5,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check:syntax": "node --check dist/app.js && node --check dist/indicators.js && node --check dist/drawings.js && node --check scripts/build.mjs && node --check scripts/manifest.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:e2e": "python3 tests/e2e/multichart.e2e.py"
   }
 }
