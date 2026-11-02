@@ -43,3 +43,25 @@ Everything the browser runs is generated into `dist/` from `src/`. Each source f
 
 
 The price-scale controller in `src/js/app/chart/price-scale.js` uses the chart library's native `PriceScaleMode.Normal` and `PriceScaleMode.Logarithmic` modes. Drawing coordinate conversion remains delegated to series `priceToCoordinate` / `coordinateToPrice` APIs, so persisted drawing anchors are not rewritten during scale changes.
+
+## Multi-chart (up to 4 charts)
+
+Chart 1 is the page's own chart. Charts 2-4 are **the same app inside iframes** (`index.html?pane=N`, `PANE` in `core/bootstrap.js`), so each one keeps its own
+chart, indicators, drawings, replay and WebSocket without any shared global state. The main page (`ui/multichart.js`, global `MC`) drives them; `ui/pane-mode.js` is the
+pane side. Works over http(s) only (the main page reaches into the iframes) and on windows wider than 820px; otherwise the app stays in single-chart mode.
+
+| Shared | How |
+| --- | --- |
+| Timeframe | the main page writes `chartSelectedTimeframe`; panes follow through the `storage` event (`pane-mode.js`) |
+| Indicators | each chart saves `inds` to localStorage and rebuilds from it on a `storage` event (`IND.reload()`, `indicators/core/engine.js`) |
+| Chart type (top bar) | `chartType` key + `storage` event (`chart/chart-type.js`) |
+| Coin table | panes read the main page's `map` through `MC.getMap()` (no second 24h download, no daily-open / market-cap requests) |
+| Drawings of the same coin | `storage` event on `dr:v1:<symbol>` reloads the other chart's store (`drawings/index.js`) |
+
+* **Active chart**: clicking a chart makes it active (`MC.activate`). The watchlist (`select()` -> `MC.routeSelect`) sets the coin of the active chart; Replay in the top bar acts on it.
+* **Left drawing toolbar**: only one exists (the main page's, a second `DrawingUI` built with `Proxy` objects that forward every call to the active chart's `DR.ctl` / `DR.store`).
+  Each chart keeps its own floating drawing bar / settings window inside its own cell. Charts notify the toolbar through `MC.barChanged`.
+* **Data use**: only the active chart keeps the 100ms `aggTrade` stream (`window.mcInactive`, `data/websocket.js`); the other charts follow the 250ms `kline` stream.
+* Each pane remembers its coin under `chartSelectedSymbol.p<N>`; the layout is stored under `mcLayout`.
+* Pane CSS: `index.html` strips the `max-width` media rules inside an iframe so a narrow cell never gets the phone layout.
+* Test: `npm run test:e2e` (Playwright + Chromium, Binance mocked) covers layouts, timeframe/indicator sync, active chart, watchlist routing, drawing toolbar and data use.

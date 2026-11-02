@@ -2359,6 +2359,106 @@ body.watchlist-hidden #side {
 /* Timeframe picker button + menu exist on phones only (the desktop keeps the full timeframe strip). */
 #btnTf, #tfmenu { display: none; }
 
+/* 11. Multi-chart ---------------------------------------------------------- */
+/* Layout: the shared left drawing toolbar (position:absolute, --dtb wide) + a grid of up to 4 chart cells.
+   Cell 1 is the page's own chart (#cw), the other cells are iframes running this same app in "pane" mode. */
+#btnMulti {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 8px;
+}
+#btnMulti[aria-expanded="true"] { background: var(--pn-hover); }
+
+#mcmenu {
+    position: absolute;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    padding: var(--sp-1);
+    border: 1px solid var(--bd-strong);
+    border-radius: var(--r-lg);
+    background: var(--pn);
+    box-shadow: var(--shadow);
+}
+#mcmenu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px var(--sp-3);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    text-align: left;
+    white-space: nowrap;
+}
+#mcmenu button:hover { background: var(--pn-hover); }
+#mcmenu button.on { color: #8eafff; }
+#mcmenu .mc-note { max-width: 230px; padding: 6px var(--sp-3) 4px; color: var(--mu); font-size: 11.5px; line-height: 1.35; white-space: normal; }
+
+.mc-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    background: var(--bg);
+}
+.mc-grid {
+    position: absolute;
+    inset: 0 0 0 var(--dtb);
+    display: grid;
+    gap: 2px;
+    background: var(--bd);
+}
+.mc-cell {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--bg);
+}
+.mc-cell > #cw {
+    position: absolute;
+    inset: 0;
+    --dtb: 0px; /* the toolbar is shared and sits left of the whole grid, so no chart reserves room for its own */
+}
+.mc-frame {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: var(--bg);
+}
+/* active chart: a thin accent frame on top of the cell */
+.mc-cell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    border: 1px solid transparent;
+    pointer-events: none;
+}
+.mc-on .mc-cell.mc-act::after { border-color: var(--acc); }
+/* this page's own toolbar copy is replaced by the shared one */
+body.mc-on #cw > .dr-tb,
+body.mc-on #cw > .dr-fly { display: none !important; }
+
+/* Pane mode (iframe): only the chart */
+html.pane #bar,
+html.pane #side,
+html.pane #mnav,
+html.pane #rs,
+html.pane .dr-tb,
+html.pane .dr-fly { display: none !important; }
+html.pane { --dtb: 0px; }
+
+/* too narrow for several charts (phones): one chart only */
+@media (max-width: 820px) {
+    #bar #btnMulti { display: none; }
+}
 /* 12. Mobile - TradingView-app style ---------------------------------------
    Phones, small tablets and landscape phones. Two full-screen pages (Chart and
    Watchlist) switched with the bottom tab bar #mnav; the drawing tools open as a

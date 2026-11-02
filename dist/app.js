@@ -7,6 +7,9 @@ const API = 'https://fapi.binance.com', WSU = 'wss://fstream.binance.com/stream'
 const TFS = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1D': '1d', '1W': '1w', '1M': '1M' };
 const TFMS = { '1m': 6e4, '5m': 3e5, '15m': 9e5, '1h': 36e5, '4h': 144e5, '1d': 864e5, '1w': 6048e5, '1M': 26784e5 };
 const $ = id => document.getElementById(id);
+/* Multi-chart: every chart added next to the main one is this same app running inside an iframe (index.html?pane=N, N = 1..3).
+   A pane has no watchlist / top bar of its own: it gets its coin list from the main page and is driven by it (see ui/pane-mode.js). */
+const PANE = +((/[?&]pane=([1-3])(?:&|$)/.exec(location.search) || [])[1] || 0);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 /* localStorage wrapper that never throws */
 const store = { get(k, d) {
@@ -90,14 +93,15 @@ const crossFmt = t => {
     return DAILY.has(tf) ? day : `${day}  ${p.hour}:${p.minute}`;
 };
 /* ---------- State ---------- */
-const SAVED_SYMBOL_KEY = 'chartSelectedSymbol';
+const SAVED_SYMBOL_KEY = 'chartSelectedSymbol' + (PANE ? '.p' + PANE : ''); /* each pane remembers its own coin */
 const SAVED_TIMEFRAME_KEY = 'chartSelectedTimeframe';
 const validTimeframes = new Set(Object.values(TFS));
-const savedSymbol = store.get(SAVED_SYMBOL_KEY, 'BTCUSDT');
+const savedSymbol = store.get(SAVED_SYMBOL_KEY, ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'][PANE]);
 const savedTimeframe = store.get(SAVED_TIMEFRAME_KEY, '1d');
 let sym = typeof savedSymbol === 'string' && /^[^_\s]{2,30}USDT$/.test(savedSymbol) ? savedSymbol : 'BTCUSDT', tf = validTimeframes.has(savedTimeframe) ? savedTimeframe : '1d', all = [], map = {}, view = [], sortKey = 's', sortDir = -1, query = '';
 store.set(SAVED_SYMBOL_KEY, sym);
-store.set(SAVED_TIMEFRAME_KEY, tf);
+if (!PANE)
+    store.set(SAVED_TIMEFRAME_KEY, tf); /* the timeframe belongs to the main page; panes only follow it */
 let data = [], noMore = false, loadingOld = false, lastClose = null, lastUp = true, closeAt = 0, skew = 0, skewOk = false, cdCol = '';
 /* pend: live candle that arrived before history finished loading; curKey: sym|tf of the data on screen;
    ctl: AbortController of in-flight chart requests; cuBusy/cuT: catch-up lock and last run time */
@@ -329,6 +333,19 @@ function setChartType(id) {
     syncTypeUi();
     window.dispatchEvent(new Event('charttypechange'));
 }
+
+/* Multi-chart: the chart type chosen in the main page's top bar is shared, so the other charts (iframes) follow it */
+addEventListener('storage', e => {
+    if (e.key !== 'chartType')
+        return;
+    const id = store.get('chartType', 'candles');
+    if (id !== chartType && CHART_TYPES.some(t => t[0] === id)) {
+        chartType = id;
+        restyleChart();
+        syncTypeUi();
+        window.dispatchEvent(new Event('charttypechange'));
+    }
+});
 
 /* ---------- Toolbar button + menu (next to Indicators) ---------- */
 const btnType = $('btnType'), typeMenu = $('typemenu');
@@ -1249,7 +1266,8 @@ function closeTfMenu() { tfMenu.hidden = true; btnTf.setAttribute('aria-expanded
 function pickTf(t) {
     if (!t || TFS[t] === tf) return;
     tf = TFS[t];
-    store.set(SAVED_TIMEFRAME_KEY, tf);
+    if (!PANE)
+        store.set(SAVED_TIMEFRAME_KEY, tf); /* writing it is what tells the panes (storage event) to follow */
     syncTfUi();
     // Keep the active timeframe visible in the horizontally scrollable toolbar.
     $('tfs').querySelector('button.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
@@ -1851,7 +1869,7 @@ const OP_WORKERS = 24; /* parallel kline requests (HTTP/2): ~500 coins load in a
 let opens = (() => { const o = store.get('dopen', {}); return o.day === dayMs ? o.m : {}; })();
 const calc = s => s.o ? (+s.p - s.o) / s.o * 100 : 0;
 async function loadOpens() {
-    if (opBusy)
+    if (PANE || opBusy)
         return;
     opBusy = true;
     const day = dayMs, shown = new Set(vis.map(s => s.s)), todo = all.filter(s => !s.o && s.nk !== day).sort((a, b) => (shown.has(b.s) - shown.has(a.s)) || b.qv - a.qv); /* rows on screen first, then busiest coins */
@@ -1903,6 +1921,8 @@ async function loadOpens() {
 }
 /* New UTC day: drop yesterday's opens and fetch fresh ones */
 function checkDay() {
+    if (PANE)
+        return;
     const d = dayStart();
     if (d === dayMs)
         return;
@@ -2057,6 +2077,8 @@ function buildView() {
 }
 /* Virtualized list: only the visible rows (+2 buffer) exist in the DOM */
 let raf = 0, vis = [], lastKey = '';
+/* the coin highlighted in the list: the selected coin of the active chart (multi-chart) */
+const actSym = () => (window.MC && MC.activeSym()) || sym;
 const sched = () => { raf || (raf = requestAnimationFrame(render)); };
 const cTxt = s => s.o ? `${s.c >= 0 ? '' : '−'}${Math.abs(s.c).toFixed(2)}%` : '–';
 const cCls = s => s.o ? (s.c >= 0 ? 'g' : 'r') : '';
@@ -2065,10 +2087,10 @@ function render() {
     const l = $('list'), a = Math.max(0, Math.floor(l.scrollTop / ROW) - 2), b = Math.min(rows.length, Math.ceil((l.scrollTop + l.clientHeight) / ROW) + 2);
     vis = rows.slice(a, b);
     $('in').style.transform = `translateY(${a * ROW}px)`;
-    const key = a + '|' + b + '|' + ver + '|' + sym;
+    const key = a + '|' + b + '|' + ver + '|' + actSym();
     if (key !== lastKey) { /* rows changed -> rebuild */
         lastKey = key;
-        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === sym ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span>${flt ? `<button class="row-remove" data-remove="${s.s}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === actSym() ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span>${flt ? `<button class="row-remove" data-remove="${s.s}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
         if (editing) {
             const i = $('in').querySelector('.sni');
             if (i) {
@@ -2245,6 +2267,10 @@ function select(s, kb) {
             sched();
         }
     }
+    if (window.MC && MC.routeSelect(s, kb)) { /* multi-chart: the coin goes to the active chart */
+        sched();
+        return;
+    }
     if (s === sym)
         return;
     sym = s;
@@ -2264,7 +2290,7 @@ document.addEventListener('keydown', e => {
     if ((tag === 'INPUT' && t.id !== 'q') || tag === 'SELECT' || tag === 'TEXTAREA' || !view.length)
         return;
     e.preventDefault();
-    const i = view.findIndex(s => s.s === sym), d = e.key === 'ArrowDown' ? 1 : -1;
+    const i = view.findIndex(s => s.s === actSym()), d = e.key === 'ArrowDown' ? 1 : -1;
     const n = i < 0 ? (d > 0 ? 0 : view.length - 1) : Math.min(view.length - 1, Math.max(0, i + d));
     if (n === i)
         return;
@@ -2281,7 +2307,7 @@ const isTypingTarget = t => !!(t && (t.isContentEditable || t.closest?.('input,t
 function nextCoin() {
     if (!view.length)
         return;
-    const i = view.findIndex(s => s.s === sym), n = i < 0 ? 0 : (i + 1) % view.length;
+    const i = view.findIndex(s => s.s === actSym()), n = i < 0 ? 0 : (i + 1) % view.length;
     select(view[n].s, true);
     const l = $('list'), top = rows.indexOf(view[n]) * ROW;
     if (top < l.scrollTop)
@@ -2643,7 +2669,8 @@ async function loadMarketCaps() {
     }
     catch (_) { }
 }
-loadMarketCaps();
+if (!PANE)
+    loadMarketCaps();
 /* ---------- Ticker data ---------- */
 /* Merge REST 24h ticker data into the symbol table (USDT perpetuals only) */
 const HIDDEN_COINS = new Set(['USDCUSDT', 'BTCDOMUSDT']); /* not shown in the watchlist */
@@ -2698,6 +2725,8 @@ function ingest(arr) {
 }
 let lastRef = 0;
 async function refresh(first, force) {
+    if (PANE)
+        return paneRefresh(); /* panes take the coin table from the main page: no second 24h download */
     /* the full 24h list is ~0.5k symbols; skip it if one was fetched moments ago (tab switches, reconnects) */
     if (!first && !force && Date.now() - lastRef < 45000)
         return;
@@ -2736,12 +2765,13 @@ let rowsOn = true, rowT = 0;
 let wsUrl = 0, wsFail = 0, wsTries = 0, wsGot = false, wsQ = [], wsQT = 0, wsLast = 0, lastTr = null, trRaf = 0;
 /* Streams we need: the selected coin (trades + candle) and, while the tab is visible, the visible rows */
 function wanted() {
-    const w = new Set(['!contractInfo']); /* Binance pushes a message whenever a contract is added / changed: reload the coin list right away */
+    const w = new Set(PANE ? [] : ['!contractInfo']); /* Binance pushes a message whenever a contract is added / changed: reload the coin list right away (the main page does it for the panes) */
     if (idle)
         return w; /* tab in the background for a while: no live data at all (it is caught up on return) */
-    if (!document.hidden && rowsOn)
+    if (!PANE && !document.hidden && rowsOn)
         vis.forEach(s => s.s && s.s !== sym && w.add(s.s.toLowerCase() + '@miniTicker')); /* watchlist rows: pulsed, ~1 small message per row every 5s */
-    w.add(sym.toLowerCase() + '@aggTrade'); /* chart: every trade, 100ms */
+    if (!window.mcInactive)
+        w.add(sym.toLowerCase() + '@aggTrade'); /* chart: every trade, 100ms. Multi-chart: only the active chart; the others follow the 250ms kline stream (less data) */
     w.add(`${sym.toLowerCase()}@kline_${tf}`);
     /* no miniTicker for the selected coin: the 250ms kline stream is already the heartbeat */
     return w;
@@ -2958,6 +2988,66 @@ setInterval(() => {
     if (Date.now() - lastRef >= (live ? 600000 : 60000))
         refresh(false, true);
 }, 15000);
+/* ---------- Multi-chart: pane mode ----------
+   A pane is this same app running inside an iframe of the main page (index.html?pane=N). It has its own chart, indicators, drawings,
+   replay and live stream, but no watchlist and no top bar: the main page drives it (coin, timeframe, indicators, drawing toolbar).
+   Everything below is inert on the main page (PANE = 0). */
+let paneTries = 0, paneT = 0;
+/* the coin table (decimals, prices) is the main page's; panes share its entries instead of downloading the 24h list again */
+function paneCopyMap() {
+    let pm = null;
+    try {
+        pm = parent.MC && parent.MC.getMap && parent.MC.getMap();
+    }
+    catch (_) { }
+    if (!pm)
+        return;
+    for (const k in pm)
+        if (!map[k])
+            map[k] = pm[k];
+}
+function paneRefresh() {
+    clearTimeout(paneT);
+    paneCopyMap();
+    const s = map[sym];
+    if (s) {
+        paneTries = 0;
+        applyPrec(s.dec);
+        header();
+        return Promise.resolve();
+    }
+    if (++paneTries < 120)
+        paneT = setTimeout(paneRefresh, 500); /* the main page is still loading its list */
+    return Promise.resolve();
+}
+if (PANE) {
+    window.mcInactive = true; /* the main page marks the active chart; the others skip the 100ms trade stream (less data) */
+    window.MCP = {
+        sym: () => sym,
+        /* the main page's watchlist picked a coin for this chart */
+        setSym(s, kb) {
+            if (!s || s === sym)
+                return;
+            paneCopyMap();
+            sym = s;
+            store.set(SAVED_SYMBOL_KEY, sym);
+            resetState();
+            header();
+            clearTimeout(selT);
+            selT = setTimeout(() => { loadChart(); syncWS(); }, kb ? 140 : 0);
+        },
+    };
+    /* the timeframe is the main page's: when it changes (storage event) every chart follows */
+    addEventListener('storage', e => {
+        if (e.key !== SAVED_TIMEFRAME_KEY)
+            return;
+        const v = store.get(SAVED_TIMEFRAME_KEY, tf), name = Object.keys(TFS).find(k => TFS[k] === v);
+        if (name)
+            pickTf(name);
+    });
+    /* touching this chart makes it the active one (the left drawing toolbar and the watchlist now act on it) */
+    addEventListener('pointerdown', () => { try { parent.MC && parent.MC.activate(PANE); } catch (_) { } }, true);
+}
 /* ---------- Start ---------- */
 applyCandleCfg(false);
 refresh(true).then(() => { loadChart(true); connect(); });
@@ -3003,3 +3093,268 @@ if (mnav) {
     });
     applyMobileView();
 }
+/* ---------- Multi-chart (main page) ----------
+   Up to 4 charts at once. Chart 1 is this page's own chart; charts 2-4 are the same app in iframes (see ui/pane-mode.js).
+   - one timeframe for all: the main page writes it to localStorage, the panes follow through the storage event
+   - one indicator list for all: every chart saves / reloads the shared list (indicators engine)
+   - ONE left drawing toolbar (this page's): its buttons are proxied to the drawing controller of the ACTIVE chart
+   - the watchlist chooses the coin of the active chart; clicking a chart makes it active */
+var MC = PANE ? null : (() => { /* panes have no layout of their own */
+    const LAYOUTS = {
+        '1': { n: 1, label: '1 chart', icon: '<rect x="3" y="4" width="14" height="12" rx="1.5"/>' },
+        '2v': { n: 2, areas: '"a b"', cols: '1fr 1fr', rows: '1fr', label: '2 charts · side by side', icon: '<rect x="3" y="4" width="6" height="12" rx="1.2"/><rect x="11" y="4" width="6" height="12" rx="1.2"/>' },
+        '2h': { n: 2, areas: '"a" "b"', cols: '1fr', rows: '1fr 1fr', label: '2 charts · stacked', icon: '<rect x="3" y="4" width="14" height="5.2" rx="1.2"/><rect x="3" y="10.8" width="14" height="5.2" rx="1.2"/>' },
+        '3': { n: 3, areas: '"a b" "c c"', cols: '1fr 1fr', rows: '1fr 1fr', label: '3 charts', icon: '<rect x="3" y="4" width="6" height="5.2" rx="1.2"/><rect x="11" y="4" width="6" height="5.2" rx="1.2"/><rect x="3" y="10.8" width="14" height="5.2" rx="1.2"/>' },
+        '4': { n: 4, areas: '"a b" "c d"', cols: '1fr 1fr', rows: '1fr 1fr', label: '4 charts', icon: '<rect x="3" y="4" width="6" height="5.2" rx="1.2"/><rect x="11" y="4" width="6" height="5.2" rx="1.2"/><rect x="3" y="10.8" width="6" height="5.2" rx="1.2"/><rect x="11" y="10.8" width="6" height="5.2" rx="1.2"/>' },
+    };
+    const AREA = ['a', 'b', 'c', 'd'], PANE_COINS = ['ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
+    const KEY = 'mcLayout';
+    const saved = store.get(KEY, {});
+    let id = LAYOUTS[saved.id] ? saved.id : '1', act = Number.isInteger(saved.a) ? saved.a : 0, n = 1;
+    let wrap = null, grid = null, cells = [], frames = [], home = null, barUI = null;
+    const barFns = new Set();
+    const btn = $('btnMulti'), menu = $('mcmenu');
+    /* works only over http(s) (the main page must be able to reach into the iframes) and on a wide window */
+    const httpOk = () => /^https?:$/.test(location.protocol);
+    const wide = () => innerWidth > 820;
+    const save = () => store.set(KEY, { id, a: act });
+    const paneWin = i => { try { return i ? (frames[i] && frames[i].contentWindow) : window; } catch (_) { return null; } };
+    const ready = i => { const w = paneWin(i); return !!(w && (i ? w.MCP : true) && w.DR); };
+    const activeDR = () => (ready(act) ? paneWin(act).DR : null);
+    /* ---------- coins of the extra charts ---------- */
+    function ensureSym(i) {
+        const k = 'chartSelectedSymbol.p' + i;
+        if (typeof store.get(k, null) === 'string')
+            return;
+        const used = new Set([sym]);
+        for (let j = 1; j < 4; j++) { const v = store.get('chartSelectedSymbol.p' + j, null); if (typeof v === 'string') used.add(v); }
+        store.set(k, PANE_COINS.find(c => !used.has(c)) || 'ETHUSDT');
+    }
+    /* ---------- left drawing toolbar shared by every chart ---------- */
+    function createBar() {
+        if (barUI || !window.DRX || !window.DR)
+            return;
+        const forward = (get, own) => new Proxy({}, {
+            get(_, k) {
+                if (own && k in own)
+                    return own[k];
+                const t = get(), v = t[k];
+                return typeof v === 'function' ? v.bind(t) : v;
+            },
+            set(_, k, v) { get()[k] = v; return true; },
+        });
+        const dr = () => activeDR() || window.DR;
+        const ctlP = forward(() => dr().ctl, { hooks: {} });
+        const stP = forward(() => dr().store, { on: f => { barFns.add(f); return () => barFns.delete(f); } });
+        barUI = new DRX.DrawingUI(document.createElement('div'), ctlP, stP);
+        /* only the left bar + its flyout belong here: the floating drawing bar, hint and settings stay inside each chart */
+        barUI.fb.remove();
+        barUI.hint.remove();
+        barUI.updateFloating = () => { };
+        /* after a toolbar click the keyboard must work on the active chart (Esc, Delete, Ctrl+Z ...) */
+        const focusSoon = () => setTimeout(focusActive, 0);
+        barUI.bar.addEventListener('pointerup', focusSoon, true);
+        barUI.fly.addEventListener('pointerup', focusSoon, true);
+    }
+    function focusActive() {
+        const w = paneWin(act);
+        try { w && w.focus(); } catch (_) { }
+    }
+    function barChanged(i) {
+        if (i !== act)
+            return;
+        barFns.forEach(f => { try { f(); } catch (_) { } });
+    }
+    /* ---------- layout ---------- */
+    function teardown() {
+        frames.forEach(f => f && f.remove());
+        frames = [];
+        cells = [];
+        if (wrap) {
+            if (barUI) { barUI.bar.remove(); barUI.fly.remove(); barUI.closeFly(); }
+            home.parent.insertBefore($('cw'), home.next);
+            wrap.remove();
+            wrap = grid = null;
+        }
+        document.body.classList.remove('mc-on');
+        n = 1;
+        act = 0;
+        window.mcInactive = false;
+        syncWS();
+    }
+    function build(L) {
+        const first = !wrap;
+        if (first) {
+            const cw = $('cw');
+            home = { parent: cw.parentNode, next: cw.nextSibling };
+            wrap = document.createElement('div');
+            wrap.className = 'mc-wrap';
+            grid = document.createElement('div');
+            grid.className = 'mc-grid';
+            wrap.appendChild(grid);
+            home.parent.insertBefore(wrap, cw);
+            const c0 = document.createElement('div');
+            c0.className = 'mc-cell';
+            c0.appendChild(cw);
+            cells[0] = c0;
+            document.body.classList.add('mc-on');
+        }
+        n = L.n;
+        grid.style.gridTemplateAreas = L.areas;
+        grid.style.gridTemplateColumns = L.cols;
+        grid.style.gridTemplateRows = L.rows;
+        for (let i = 0; i < 4; i++) {
+            if (i >= n) { /* chart no longer in the layout: its iframe (and WebSocket) goes away */
+                if (cells[i]) { cells[i].remove(); cells[i] = null; frames[i] = null; }
+                continue;
+            }
+            if (!cells[i]) {
+                ensureSym(i);
+                const c = document.createElement('div'), f = document.createElement('iframe');
+                c.className = 'mc-cell';
+                f.className = 'mc-frame';
+                f.title = 'Chart ' + (i + 1);
+                f.src = location.pathname + '?pane=' + i;
+                c.appendChild(f);
+                cells[i] = c;
+                frames[i] = f;
+            }
+            cells[i].style.gridArea = AREA[i];
+            if (cells[i].parentNode !== grid)
+                grid.appendChild(cells[i]);
+        }
+        cells[0].style.gridArea = AREA[0];
+        if (cells[0].parentNode !== grid)
+            grid.insertBefore(cells[0], grid.firstChild);
+        createBar();
+        if (barUI) {
+            barUI.host = wrap;
+            wrap.append(barUI.bar, barUI.fly);
+        }
+    }
+    function setFlags() {
+        for (let i = 0; i < n; i++) {
+            const w = paneWin(i);
+            if (!w)
+                continue;
+            const off = n > 1 && i !== act;
+            if (w.mcInactive !== off) {
+                w.mcInactive = off;
+                try { w.syncWS && w.syncWS(); } catch (_) { }
+            }
+        }
+    }
+    function activate(i) {
+        if (!(i >= 0 && i < n))
+            i = 0;
+        act = i;
+        cells.forEach((c, k) => c && c.classList.toggle('mc-act', n > 1 && k === i));
+        setFlags();
+        if (barUI) { barUI.closeFly(); barUI.refresh(); }
+        save();
+        sched(); /* watchlist: highlight the coin of this chart */
+    }
+    function apply(nid) {
+        if (!LAYOUTS[nid])
+            nid = '1';
+        id = nid;
+        const eff = httpOk() && wide() ? LAYOUTS[nid] : LAYOUTS['1'];
+        if (eff.n === 1) {
+            if (wrap) teardown();
+        }
+        else {
+            build(eff);
+            activate(act < eff.n ? act : 0);
+            /* a chart that finished loading after the layout was applied still has to learn whether it is the active one */
+            frames.forEach((f, i) => { if (f) waitReady(i); });
+        }
+        syncMenu();
+        save();
+    }
+    function waitReady(i, tries = 0) {
+        if (ready(i)) {
+            setFlags();
+            barChanged(i);
+            return;
+        }
+        if (tries < 300 && frames[i])
+            setTimeout(() => waitReady(i, tries + 1), 100);
+    }
+    /* ---------- top bar button + menu ---------- */
+    const svg = (inner, s = 18) => `<svg viewBox="0 0 20 20" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${inner}</svg>`;
+    function syncMenu() {
+        btn.innerHTML = svg(LAYOUTS[id].icon, 18);
+        btn.title = 'Multi-chart: ' + LAYOUTS[id].label;
+        btn.setAttribute('aria-label', 'Multi-chart layout: ' + LAYOUTS[id].label);
+        menu.innerHTML = Object.keys(LAYOUTS).map(k => `<button type="button" role="menuitemradio" data-l="${k}" aria-checked="${k === id}" class="${k === id ? 'on' : ''}">${svg(LAYOUTS[k].icon, 20)}<span>${LAYOUTS[k].label}</span></button>`).join('')
+            + (httpOk() ? '' : '<div class="mc-note">Multi-chart needs the page to be opened over http(s) (a local server or GitHub Pages), not as a file.</div>');
+    }
+    function closeMenu() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+    btn.onclick = e => {
+        e.stopPropagation();
+        if (!menu.hidden)
+            return closeMenu();
+        const main = $('main'), b = btn.getBoundingClientRect(), m = main.getBoundingClientRect();
+        menu.hidden = false;
+        menu.style.left = Math.max(8, Math.min(b.left - m.left, main.clientWidth - menu.offsetWidth - 8)) + 'px';
+        menu.style.top = b.bottom - m.top + 3 + 'px';
+        btn.setAttribute('aria-expanded', 'true');
+    };
+    menu.onclick = e => {
+        const b = e.target.closest('button[data-l]');
+        if (!b)
+            return;
+        closeMenu();
+        apply(b.dataset.l);
+    };
+    document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) closeMenu(); });
+    addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+    /* Replay is a top-bar button: with several charts it replays the active one */
+    $('bar').addEventListener('click', e => {
+        const b = e.target.closest('#btnReplay');
+        if (!b || n < 2 || act === 0)
+            return;
+        const w = paneWin(act), t = w && w.document.getElementById('btnReplay');
+        if (t) {
+            e.stopPropagation();
+            e.preventDefault();
+            t.click();
+        }
+    }, true);
+    /* clicking this page's own chart makes chart 1 the active one */
+    $('cw').addEventListener('pointerdown', () => { if (n > 1 && act !== 0) activate(0); }, true);
+    /* the window got too narrow (phones, small windows) -> back to one chart; wide again -> the saved layout returns */
+    let rzT = 0;
+    addEventListener('resize', () => {
+        clearTimeout(rzT);
+        rzT = setTimeout(() => {
+            const want = httpOk() && wide() ? LAYOUTS[id].n : 1;
+            if (want !== n || (want === 1 && wrap))
+                apply(id);
+        }, 150);
+    });
+    syncMenu();
+    /* restore the saved layout once the drawing layer (a later script) is there */
+    if (id !== '1') {
+        const t = setInterval(() => { if (window.DR && window.DRX) { clearInterval(t); apply(id); } }, 40);
+    }
+    return {
+        apply, activate,
+        layout: () => id, count: () => n, active: () => act,
+        getMap: () => map,
+        barChanged,
+        keysBlocked: () => n > 1 && act !== 0,
+        activeSym: () => { if (n < 2 || act === 0) return null; const w = paneWin(act); try { return w && w.MCP ? w.MCP.sym() : null; } catch (_) { return null; } },
+        /* the watchlist picked a coin: for chart 2-4 it goes into that chart's iframe */
+        routeSelect(s, kb) {
+            if (n < 2 || act === 0)
+                return false;
+            const w = paneWin(act);
+            if (!w || !w.MCP)
+                return false;
+            w.MCP.setSym(s, kb);
+            return true;
+        },
+        frame: i => paneWin(i),
+    };
+})();

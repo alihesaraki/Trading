@@ -47,3 +47,8 @@ Binance USDⓈ-M update speeds: `<symbol>@miniTicker` 2s, `<symbol>@kline_<tf>` 
 - A dead socket is replaced immediately instead of waiting for `onclose`.
 - A REST 24h list no longer overwrites a price that arrived over the socket in the last 5 s.
 - Tests: `tests/websocket-live.test.mjs`.
+
+## Multi-chart data use
+
+Every extra chart is a full chart: its own candle download (300+ candles) and its own `kline` stream (about 250ms). Only the **active** chart keeps the extra 100ms `aggTrade`
+stream; the others do not, which roughly halves their live traffic. Extra charts download no 24h coin list, daily opens or market caps (they reuse the main page's).

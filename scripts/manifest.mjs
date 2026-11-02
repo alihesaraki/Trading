@@ -42,8 +42,10 @@ export const bundles = {
   'data/ticker-data.js',
   'data/websocket.js',
   'data/watchdog.js',
+  'ui/pane-mode.js',
   'core/startup.js',
-  'ui/mobile-nav.js'
+  'ui/mobile-nav.js',
+  'ui/multichart.js'
     ],
   },
   indicators: {
@@ -104,6 +106,7 @@ export const bundles = {
   'drawing-tools.css',
   'responsive.css',
   'replay.css',
+  'multichart.css',
   'mobile.css'
     ],
   },

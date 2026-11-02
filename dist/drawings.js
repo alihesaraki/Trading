@@ -1541,7 +1541,10 @@
         this.hooks.menu?.(e.clientX, e.clientY, this.menuItems(d2));
       };
       /* Arrow keys nudge the selected drawings: left/right = one bar, up/down = a few pixels of price. */
+      /* multi-chart: while another chart is active this (main page) controller must not react to the keyboard */
+      this.keysOff = () => false;
       this.onArrow = (e) => {
+        if (this.keysOff()) return;
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
         if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || this.tool || this.draft || this.gesture) return;
         const t = e.target;
@@ -1571,9 +1574,11 @@
       };
       /* Pressing / releasing Shift while a line is being drawn re-evaluates the straight-line snap without a mouse move. */
       this.onShift = (e) => {
+        if (this.keysOff()) return;
         if (e.key === "Shift" && this.draft && !this.draft.free && this.lastPointer) this.updatePreview(this.lastPointer, { shiftKey: e.type === "keydown" });
       };
       this.onKey = (e) => {
+        if (this.keysOff()) return;
         const t = e.target;
         if (t && (t.isContentEditable || t.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]'))) return;
         const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
@@ -1675,6 +1680,7 @@
       };
       /* Hold Ctrl = temporary Brush (left button draws); releasing Ctrl restores the previous tool / mode. */
       this.onCtrlDown = (e) => {
+        if (this.keysOff()) return;
         if (e.key !== "Control" || e.repeat) return;
         const t = e.target;
         if (t && (t.isContentEditable || t.closest?.('input, textarea, select, [contenteditable="true"], [role="textbox"]'))) return;
@@ -3005,5 +3011,23 @@
   var w = window;
   if (w.TVDR && w.LightweightCharts) {
     w.DR = initDrawings(w.TVDR, document.getElementById("cw"), document.getElementById("chart"));
+    w.DRX = { DrawingUI };
+    /* ---- Multi-chart ----
+       The left toolbar lives in the main page and drives the active chart. Every chart tells it when its drawing state changed. */
+    const idx = typeof PANE === "number" ? PANE : 0;
+    const bridge = () => (idx ? w.parent.MC : w.MC);
+    const notify = () => { try { const m = bridge(); m && m.barChanged && m.barChanged(idx); } catch (_) {} };
+    w.DR.store.on(notify);
+    const prevChanged = w.DR.ctl.hooks.changed;
+    w.DR.ctl.hooks.changed = function () { if (prevChanged) prevChanged.apply(this, arguments); notify(); };
+    if (!idx) w.DR.ctl.keysOff = () => !!(w.MC && w.MC.keysBlocked && w.MC.keysBlocked());
+    /* Another chart showing the same coin changed its drawings (saved to localStorage): reload them here */
+    w.addEventListener("storage", (e) => {
+      const st = w.DR.store;
+      if (!st.symbol || e.key !== st.key(st.symbol)) return;
+      w.DR.ctl.cancelDraft();
+      w.DR.ctl.selection.clear();
+      st.load(st.symbol);
+    });
   }
 })();
