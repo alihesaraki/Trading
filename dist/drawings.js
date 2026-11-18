@@ -3016,7 +3016,7 @@
        The left toolbar lives in the main page and drives the active chart. Every chart tells it when its drawing state changed. */
     const idx = typeof PANE === "number" ? PANE : 0;
     const bridge = () => (idx ? w.parent.MC : w.MC);
-    const notify = () => { try { const m = bridge(); m && m.barChanged && m.barChanged(idx); } catch (_) {} };
+    const notify = () => { try { const m = bridge(); m && m.barChanged && m.barChanged(idx); } catch (_) { /* the other window is not ready yet or is cross-origin: the toolbar refreshes on its next event */ } };
     w.DR.store.on(notify);
     const prevChanged = w.DR.ctl.hooks.changed;
     w.DR.ctl.hooks.changed = function () { if (prevChanged) prevChanged.apply(this, arguments); notify(); };

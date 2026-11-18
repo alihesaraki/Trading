@@ -7,3 +7,5 @@
 - **Browser-level verification:** syntax/build and unit tests do not prove live chart rendering or every drawing/indicator interaction. Those still require browser testing against realistic data.
 - **Performance baselines:** this delivery did not include browser profiling, so runtime bottlenecks and any quantitative gains remain unmeasured.
 - **CSS cascade:** the source stylesheet's rule order is preserved by the build and may affect appearance. Large-scale CSS restructuring should be validated visually.
+- **CSP uses `style-src 'unsafe-inline'`:** the app builds many inline `style="…"` attributes from JS templates. Removing that needs those styles moved to classes/CSSOM; scripts are already locked down (no `unsafe-inline`/`unsafe-eval`).
+- **CDN fallbacks are untested against the real CDNs:** their integrity hash was set from the vendored file; if a CDN's bytes differ, that fallback is rejected (the local copy is the primary source).

@@ -11,6 +11,9 @@ const $ = id => document.getElementById(id);
    A pane has no watchlist / top bar of its own: it gets its coin list from the main page and is driven by it (see ui/pane-mode.js). */
 const PANE = +((/[?&]pane=([1-3])(?:&|$)/.exec(location.search) || [])[1] || 0);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+/* Diagnostics: silent by default; run localStorage.setItem('debug','1') and reload to print swallowed errors.
+   Used where a failure is expected and harmless (offline, blocked storage, cross-origin frame) but should stay findable. */
+const log = { warn(scope, err) { try { if (localStorage.getItem('debug') === '1') console.warn('[chart]', scope, err); } catch (_) { /* storage blocked: nowhere to read the flag */ } } };
 /* localStorage wrapper that never throws */
 const store = { get(k, d) {
         try {
@@ -24,7 +27,7 @@ const store = { get(k, d) {
         try {
             localStorage.setItem(k, JSON.stringify(v));
         }
-        catch (_) { }
+        catch (err) { log.warn('storage-write', err); }
     } };
 const getJ = (u, sig) => fetch(u, { signal: sig }).then(r => r.json());
 /* ---------- ColorPalette: reusable 8 x 8 colour picker palette ----------
@@ -178,7 +181,7 @@ const candle = k => ({ time: k[0] / 1000, open: +k[1], high: +k[2], low: +k[3], 
 const bar = k => ({ time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c, v: +k.v, T: k.T });
 /* chartAlts: helper series that draw the non-candle chart types (line, area, bars ...), see chart/chart-type.js */
 let chartAlts = [];
-const applyPrec = d => { const pf = { priceFormat: { type: 'price', precision: d, minMove: 1 / Math.pow(10, d) } }; series.applyOptions(pf); chartAlts.forEach(s => { try { s.applyOptions(pf); } catch (_) { } }); };
+const applyPrec = d => { const pf = { priceFormat: { type: 'price', precision: d, minMove: 1 / Math.pow(10, d) } }; series.applyOptions(pf); chartAlts.forEach(s => { try { s.applyOptions(pf); } catch (err) { log.warn('chart', err); } }); };
 /* ---------- Chart type (TradingView "Chart type" menu) ----------
    The candlestick `series` always stays on the chart: drawings, the countdown, the price line, markers and every
    coordinate helper depend on it. Candle-like types (Candles, Hollow, Heikin Ashi, High-low) only change the data and the
@@ -258,7 +261,7 @@ function altPoints(b, prev) {
     return [];
 }
 function buildAlts() {
-    chartAlts.forEach(s => { try { chart.removeSeries(s); } catch (_) { } });
+    chartAlts.forEach(s => { try { chart.removeSeries(s); } catch (err) { log.warn('chart-type', err); } });
     chartAlts = [];
     const pf = series.options().priceFormat, c = lineCfg.color, w = lineCfg.width, LT = LightweightCharts.LineType || {};
     const base = { priceFormat: pf, priceLineVisible: false, lastValueVisible: false };
@@ -640,7 +643,7 @@ try {
         if (/^#[0-9a-f]{6}$/i.test(saved.cross)) bgCfg.cross = saved.cross;
         if (saved.crossStyle in LINE_STYLES) bgCfg.crossStyle = saved.crossStyle;
     }
-} catch (_) { }
+} catch (err) { log.warn('background', err); }
 
 function bgLuma(hex) {
     const n = parseInt(hex.slice(1), 16);
@@ -957,7 +960,7 @@ async function catchUp(force) {
         closeAt = e[6] + 1;
         window.IND && IND.tick();
     }
-    catch (_) { }
+    catch (err) { log.warn('history-sync', err); }
     finally {
         cuBusy = false;
     }
@@ -985,7 +988,7 @@ async function loadOlder() {
         if (rg)
             chart.timeScale().setVisibleLogicalRange({ from: rg.from + add.length, to: rg.to + add.length }); /* keep the view where it was */
     }
-    catch (e) { }
+    catch (err) { log.warn('older-history', err); }
     finally {
         if (my === tok) {
             loadingOld = false;
@@ -1146,7 +1149,7 @@ function copyText(t) {
         try {
             document.execCommand('copy');
         }
-        catch (_) { }
+        catch (err) { log.warn('copy-fallback', err); }
         a.remove();
     };
     if (navigator.clipboard && navigator.clipboard.writeText)
@@ -2090,7 +2093,12 @@ function render() {
     const key = a + '|' + b + '|' + ver + '|' + actSym();
     if (key !== lastKey) { /* rows changed -> rebuild */
         lastKey = key;
-        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === actSym() ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span>${flt ? `<button class="row-remove" data-remove="${s.s}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        const focusedSym = document.activeElement && document.activeElement.closest ? (document.activeElement.closest('#in .row:not(.sec)') || {}).dataset?.s : undefined; /* the rebuild below would drop keyboard focus */
+        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === actSym() ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" role="button" tabindex="0" aria-current="${s.s === actSym()}" data-s="${esc(s.s)}"><button class="fl ${flags[s.s] || ''}" data-f="${esc(s.s)}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${esc(coinName(s.b))}</span>${flt ? `<button class="row-remove" data-remove="${esc(s.s)}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        if (focusedSym !== undefined && !editing) {
+            const again = [...$('in').children].find(r => r.dataset.s === focusedSym);
+            if (again) again.focus({ preventScroll: true });
+        }
         if (editing) {
             const i = $('in').querySelector('.sni');
             if (i) {
@@ -2156,6 +2164,18 @@ $('list').addEventListener('focusout', e => {
         endEdit(e.target, true);
 });
 $('list').addEventListener('keydown', e => {
+    const row = e.target.classList.contains('row') && !e.target.classList.contains('sec') ? e.target : null;
+    if (row) { /* listbox-style keyboard use: Enter/Space select, arrows move between rows */
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(row.dataset.s); return; }
+        const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+        if (step) {
+            e.preventDefault();
+            const next = step > 0 ? row.nextElementSibling : row.previousElementSibling;
+            if (next) next.focus();
+            else $('list').scrollTop += step * ROW; /* neighbouring row is not rendered yet; the next render keeps focus on this row */
+        }
+        return;
+    }
     if (e.target.classList.contains('sc') && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();
         toggleSec(e.target.closest('.sec').dataset.sec);
@@ -2210,7 +2230,7 @@ $('q').oninput = e => {
         try {
             e.target.setSelectionRange(pos, pos);
         }
-        catch (_) { }
+        catch (err) { log.warn('watchlist-sections', err); }
     }
     query = converted;
     buildView();
@@ -2392,7 +2412,7 @@ function dgStart() {
     try {
         $('list').setPointerCapture(d.id);
     }
-    catch (_) { }
+    catch (err) { log.warn('watchlist-drag-drop', err); }
     d.raf = requestAnimationFrame(dgTick);
 }
 /* Move the floating row, work out the drop slot (0..rows.length = "before rows[slot]") and show the blue line */
@@ -2549,7 +2569,7 @@ $('cols').addEventListener('pointerdown', e => {
     try {
         h.setPointerCapture(e.pointerId);
     }
-    catch (_) { }
+    catch (err) { log.warn('watchlist-columns', err); }
     h.classList.add('on');
     document.body.classList.add('crs');
 });
@@ -2667,7 +2687,7 @@ async function loadMarketCaps() {
             sched();
         }
     }
-    catch (_) { }
+    catch (err) { log.warn('market-caps', err); }
 }
 if (!PANE)
     loadMarketCaps();
@@ -2676,6 +2696,8 @@ if (!PANE)
 const HIDDEN_COINS = new Set(['USDCUSDT', 'BTCDOMUSDT']); /* not shown in the watchlist */
 /* Counters for the last ticker list: total contracts returned by Binance vs. what the watchlist shows.
    Run coinStats() in the browser console to see them. */
+/* Non-ASCII coin names are legitimate, so only control/space and markup-significant characters are rejected: symbols end up in HTML templates. */
+const UNSAFE_SYMBOL_CHARS = /[\x00-\x20<>"'`&]/;
 let coinStatsInfo = { total: 0, shown: 0, dated: 0, notUsdt: 0, hidden: 0 };
 window.coinStats = () => ({ ...coinStatsInfo, inWatchlist: all.length });
 function ingest(arr) {
@@ -2690,7 +2712,7 @@ function ingest(arr) {
             st.notUsdt++;
             continue;
         }
-        if (HIDDEN_COINS.has(n) || /[\x00-\x20]/.test(n)) {
+        if (HIDDEN_COINS.has(n) || UNSAFE_SYMBOL_CHARS.test(n)) {
             st.hidden++;
             continue;
         }
@@ -2820,7 +2842,7 @@ function wsReset() {
         try {
             ws.close();
         }
-        catch (_) { }
+        catch (err) { log.warn('websocket', err); }
     }
     clearTimeout(wsQT);
     wsQT = 0;
@@ -2999,7 +3021,7 @@ function paneCopyMap() {
     try {
         pm = parent.MC && parent.MC.getMap && parent.MC.getMap();
     }
-    catch (_) { }
+    catch (err) { log.warn('pane-mode', err); }
     if (!pm)
         return;
     for (const k in pm)
@@ -3046,7 +3068,7 @@ if (PANE) {
             pickTf(name);
     });
     /* touching this chart makes it the active one (the left drawing toolbar and the watchlist now act on it) */
-    addEventListener('pointerdown', () => { try { parent.MC && parent.MC.activate(PANE); } catch (_) { } }, true);
+    addEventListener('pointerdown', () => { try { parent.MC && parent.MC.activate(PANE); } catch (err) { log.warn('pane-mode', err); } }, true);
 }
 /* ---------- Start ---------- */
 applyCandleCfg(false);
@@ -3158,12 +3180,12 @@ var MC = PANE ? null : (() => { /* panes have no layout of their own */
     }
     function focusActive() {
         const w = paneWin(act);
-        try { w && w.focus(); } catch (_) { }
+        try { w && w.focus(); } catch (err) { log.warn('multichart', err); }
     }
     function barChanged(i) {
         if (i !== act)
             return;
-        barFns.forEach(f => { try { f(); } catch (_) { } });
+        barFns.forEach(f => { try { f(); } catch (err) { log.warn('multichart', err); } });
     }
     /* ---------- layout ---------- */
     function teardown() {
@@ -3240,7 +3262,7 @@ var MC = PANE ? null : (() => { /* panes have no layout of their own */
             const off = n > 1 && i !== act;
             if (w.mcInactive !== off) {
                 w.mcInactive = off;
-                try { w.syncWS && w.syncWS(); } catch (_) { }
+                try { w.syncWS && w.syncWS(); } catch (err) { log.warn('multichart', err); }
             }
         }
     }

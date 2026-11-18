@@ -944,6 +944,12 @@ body.crs * {
 }
 
 #flpick .sw.star { color: #f5b301; }
+
+/* Keyboard focus ring for rows (rows are focusable: role=button, tabindex=0) */
+.row:focus-visible {
+    outline: 2px solid var(--acc);
+    outline-offset: -2px;
+}
 /* 6. Menus & popovers ------------------------------------------------------ */
 #imenu,
 #ctx,
@@ -2958,4 +2964,14 @@ html.pane { --dtb: 0px; }
 @media (min-width: 821px) and (pointer: fine), (min-width: 821px) and (min-height: 501px) {
     #cols, .row { grid-template-columns: minmax(0, var(--c1, 1fr)) minmax(0, var(--c2, 1fr)) minmax(0, var(--c3, 1fr)); }
     .gr { display: block !important; }
+}
+
+/* Respect the OS "reduce motion" setting: no animated transitions (kept last so it wins the cascade) */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

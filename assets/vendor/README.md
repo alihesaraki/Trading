@@ -1,12 +1,15 @@
 # Self-hosted libraries
 
-Put this file here so the site no longer depends on a CDN:
+`lightweight-charts.standalone.production.js` is TradingView Lightweight Charts **4.2.0** (Apache-2.0; keep its license header).
 
-    lightweight-charts.standalone.production.js   (version 4.2.0)
+## Updating it
 
-Download it (once) from:
-https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js
+1. Replace the file (e.g. `npm pack lightweight-charts@<version>` and take `dist/lightweight-charts.standalone.production.js` from the tarball).
+2. Update the version in the three CDN fallback URLs in `index.html`.
+3. Regenerate the integrity hash and put it in `LIB_INTEGRITY` (`index.html`):
 
-or with npm:  `npm pack lightweight-charts@4.2.0`  -> take `dist/lightweight-charts.standalone.production.js` from the tarball.
+       openssl dgst -sha384 -binary assets/vendor/lightweight-charts.standalone.production.js | openssl base64 -A
 
-index.html tries this local file first, then falls back to jsDelivr, cdnjs and unpkg.
+4. `npm test` (`tests/hardening.test.mjs` checks that the hash matches the file) and check the chart in a browser.
+
+`index.html` tries this local file first, then jsDelivr, cdnjs and unpkg. A CDN copy whose bytes differ from the local file is rejected by Subresource Integrity.
