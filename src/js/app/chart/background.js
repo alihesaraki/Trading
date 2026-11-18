@@ -14,7 +14,7 @@ try {
         if (/^#[0-9a-f]{6}$/i.test(saved.cross)) bgCfg.cross = saved.cross;
         if (saved.crossStyle in LINE_STYLES) bgCfg.crossStyle = saved.crossStyle;
     }
-} catch (_) { }
+} catch (err) { log.warn('background', err); }
 
 function bgLuma(hex) {
     const n = parseInt(hex.slice(1), 16);

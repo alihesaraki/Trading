@@ -68,7 +68,7 @@ function wsReset() {
         try {
             ws.close();
         }
-        catch (_) { }
+        catch (err) { log.warn('websocket', err); }
     }
     clearTimeout(wsQT);
     wsQT = 0;

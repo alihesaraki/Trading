@@ -63,12 +63,12 @@ var MC = PANE ? null : (() => { /* panes have no layout of their own */
     }
     function focusActive() {
         const w = paneWin(act);
-        try { w && w.focus(); } catch (_) { }
+        try { w && w.focus(); } catch (err) { log.warn('multichart', err); }
     }
     function barChanged(i) {
         if (i !== act)
             return;
-        barFns.forEach(f => { try { f(); } catch (_) { } });
+        barFns.forEach(f => { try { f(); } catch (err) { log.warn('multichart', err); } });
     }
     /* ---------- layout ---------- */
     function teardown() {
@@ -145,7 +145,7 @@ var MC = PANE ? null : (() => { /* panes have no layout of their own */
             const off = n > 1 && i !== act;
             if (w.mcInactive !== off) {
                 w.mcInactive = off;
-                try { w.syncWS && w.syncWS(); } catch (_) { }
+                try { w.syncWS && w.syncWS(); } catch (err) { log.warn('multichart', err); }
             }
         }
     }

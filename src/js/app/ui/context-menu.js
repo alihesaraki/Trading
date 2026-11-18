@@ -37,7 +37,7 @@ function copyText(t) {
         try {
             document.execCommand('copy');
         }
-        catch (_) { }
+        catch (err) { log.warn('copy-fallback', err); }
         a.remove();
     };
     if (navigator.clipboard && navigator.clipboard.writeText)

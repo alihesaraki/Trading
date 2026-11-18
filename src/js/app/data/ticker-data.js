@@ -3,6 +3,8 @@
 const HIDDEN_COINS = new Set(['USDCUSDT', 'BTCDOMUSDT']); /* not shown in the watchlist */
 /* Counters for the last ticker list: total contracts returned by Binance vs. what the watchlist shows.
    Run coinStats() in the browser console to see them. */
+/* Non-ASCII coin names are legitimate, so only control/space and markup-significant characters are rejected: symbols end up in HTML templates. */
+const UNSAFE_SYMBOL_CHARS = /[\x00-\x20<>"'`&]/;
 let coinStatsInfo = { total: 0, shown: 0, dated: 0, notUsdt: 0, hidden: 0 };
 window.coinStats = () => ({ ...coinStatsInfo, inWatchlist: all.length });
 function ingest(arr) {
@@ -17,7 +19,7 @@ function ingest(arr) {
             st.notUsdt++;
             continue;
         }
-        if (HIDDEN_COINS.has(n) || /[\x00-\x20]/.test(n)) {
+        if (HIDDEN_COINS.has(n) || UNSAFE_SYMBOL_CHARS.test(n)) {
             st.hidden++;
             continue;
         }

@@ -77,7 +77,7 @@ function altPoints(b, prev) {
     return [];
 }
 function buildAlts() {
-    chartAlts.forEach(s => { try { chart.removeSeries(s); } catch (_) { } });
+    chartAlts.forEach(s => { try { chart.removeSeries(s); } catch (err) { log.warn('chart-type', err); } });
     chartAlts = [];
     const pf = series.options().priceFormat, c = lineCfg.color, w = lineCfg.width, LT = LightweightCharts.LineType || {};
     const base = { priceFormat: pf, priceLineVisible: false, lastValueVisible: false };

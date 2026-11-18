@@ -61,4 +61,4 @@ const candle = k => ({ time: k[0] / 1000, open: +k[1], high: +k[2], low: +k[3], 
 const bar = k => ({ time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c, v: +k.v, T: k.T });
 /* chartAlts: helper series that draw the non-candle chart types (line, area, bars ...), see chart/chart-type.js */
 let chartAlts = [];
-const applyPrec = d => { const pf = { priceFormat: { type: 'price', precision: d, minMove: 1 / Math.pow(10, d) } }; series.applyOptions(pf); chartAlts.forEach(s => { try { s.applyOptions(pf); } catch (_) { } }); };
+const applyPrec = d => { const pf = { priceFormat: { type: 'price', precision: d, minMove: 1 / Math.pow(10, d) } }; series.applyOptions(pf); chartAlts.forEach(s => { try { s.applyOptions(pf); } catch (err) { log.warn('chart', err); } }); };

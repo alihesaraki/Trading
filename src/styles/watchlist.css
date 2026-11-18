@@ -408,3 +408,9 @@ body.crs * {
 }
 
 #flpick .sw.star { color: #f5b301; }
+
+/* Keyboard focus ring for rows (rows are focusable: role=button, tabindex=0) */
+.row:focus-visible {
+    outline: 2px solid var(--acc);
+    outline-offset: -2px;
+}

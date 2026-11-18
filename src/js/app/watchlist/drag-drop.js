@@ -54,7 +54,7 @@ function dgStart() {
     try {
         $('list').setPointerCapture(d.id);
     }
-    catch (_) { }
+    catch (err) { log.warn('watchlist-drag-drop', err); }
     d.raf = requestAnimationFrame(dgTick);
 }
 /* Move the floating row, work out the drop slot (0..rows.length = "before rows[slot]") and show the blue line */

@@ -9,7 +9,7 @@ function paneCopyMap() {
     try {
         pm = parent.MC && parent.MC.getMap && parent.MC.getMap();
     }
-    catch (_) { }
+    catch (err) { log.warn('pane-mode', err); }
     if (!pm)
         return;
     for (const k in pm)
@@ -56,5 +56,5 @@ if (PANE) {
             pickTf(name);
     });
     /* touching this chart makes it the active one (the left drawing toolbar and the watchlist now act on it) */
-    addEventListener('pointerdown', () => { try { parent.MC && parent.MC.activate(PANE); } catch (_) { } }, true);
+    addEventListener('pointerdown', () => { try { parent.MC && parent.MC.activate(PANE); } catch (err) { log.warn('pane-mode', err); } }, true);
 }

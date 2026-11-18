@@ -156,7 +156,12 @@ function render() {
     const key = a + '|' + b + '|' + ver + '|' + actSym();
     if (key !== lastKey) { /* rows changed -> rebuild */
         lastKey = key;
-        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === actSym() ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" data-s="${s.s}"><button class="fl ${flags[s.s] || ''}" data-f="${s.s}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${coinName(s.b)}</span>${flt ? `<button class="row-remove" data-remove="${s.s}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        const focusedSym = document.activeElement && document.activeElement.closest ? (document.activeElement.closest('#in .row:not(.sec)') || {}).dataset?.s : undefined; /* the rebuild below would drop keyboard focus */
+        $('in').innerHTML = vis.map(s => s.sec ? secHtml(s) : `<div class="row${s.s === actSym() ? ' act' : ''}${s.s === dragS ? ' dim' : ''}" role="button" tabindex="0" aria-current="${s.s === actSym()}" data-s="${esc(s.s)}"><button class="fl ${flags[s.s] || ''}" data-f="${esc(s.s)}" title="Choose flag color">${FLAG}</button><span class="nm${nmCls(s.b)}">${esc(coinName(s.b))}</span>${flt ? `<button class="row-remove" data-remove="${esc(s.s)}" aria-label="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}" title="${flt === 'fav' ? 'Remove from favorites' : 'Remove flag'}">×</button>` : ''}<b class="p ${s.d}">${fmt(s)}</b><b class="c ${cCls(s)}">${cTxt(s)}</b></div>`).join('');
+        if (focusedSym !== undefined && !editing) {
+            const again = [...$('in').children].find(r => r.dataset.s === focusedSym);
+            if (again) again.focus({ preventScroll: true });
+        }
         if (editing) {
             const i = $('in').querySelector('.sni');
             if (i) {
@@ -222,6 +227,18 @@ $('list').addEventListener('focusout', e => {
         endEdit(e.target, true);
 });
 $('list').addEventListener('keydown', e => {
+    const row = e.target.classList.contains('row') && !e.target.classList.contains('sec') ? e.target : null;
+    if (row) { /* listbox-style keyboard use: Enter/Space select, arrows move between rows */
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(row.dataset.s); return; }
+        const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+        if (step) {
+            e.preventDefault();
+            const next = step > 0 ? row.nextElementSibling : row.previousElementSibling;
+            if (next) next.focus();
+            else $('list').scrollTop += step * ROW; /* neighbouring row is not rendered yet; the next render keeps focus on this row */
+        }
+        return;
+    }
     if (e.target.classList.contains('sc') && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();
         toggleSec(e.target.closest('.sec').dataset.sec);
@@ -276,7 +293,7 @@ $('q').oninput = e => {
         try {
             e.target.setSelectionRange(pos, pos);
         }
-        catch (_) { }
+        catch (err) { log.warn('watchlist-sections', err); }
     }
     query = converted;
     buildView();

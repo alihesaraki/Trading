@@ -11,6 +11,9 @@ const $ = id => document.getElementById(id);
    A pane has no watchlist / top bar of its own: it gets its coin list from the main page and is driven by it (see ui/pane-mode.js). */
 const PANE = +((/[?&]pane=([1-3])(?:&|$)/.exec(location.search) || [])[1] || 0);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+/* Diagnostics: silent by default; run localStorage.setItem('debug','1') and reload to print swallowed errors.
+   Used where a failure is expected and harmless (offline, blocked storage, cross-origin frame) but should stay findable. */
+const log = { warn(scope, err) { try { if (localStorage.getItem('debug') === '1') console.warn('[chart]', scope, err); } catch (_) { /* storage blocked: nowhere to read the flag */ } } };
 /* localStorage wrapper that never throws */
 const store = { get(k, d) {
         try {
@@ -24,6 +27,6 @@ const store = { get(k, d) {
         try {
             localStorage.setItem(k, JSON.stringify(v));
         }
-        catch (_) { }
+        catch (err) { log.warn('storage-write', err); }
     } };
 const getJ = (u, sig) => fetch(u, { signal: sig }).then(r => r.json());

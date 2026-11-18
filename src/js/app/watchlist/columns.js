@@ -16,7 +16,7 @@ $('cols').addEventListener('pointerdown', e => {
     try {
         h.setPointerCapture(e.pointerId);
     }
-    catch (_) { }
+    catch (err) { log.warn('watchlist-columns', err); }
     h.classList.add('on');
     document.body.classList.add('crs');
 });

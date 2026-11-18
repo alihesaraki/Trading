@@ -24,7 +24,7 @@ async function loadMarketCaps() {
             sched();
         }
     }
-    catch (_) { }
+    catch (err) { log.warn('market-caps', err); }
 }
 if (!PANE)
     loadMarketCaps();

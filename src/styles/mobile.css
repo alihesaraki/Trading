@@ -498,3 +498,13 @@
     #cols, .row { grid-template-columns: minmax(0, var(--c1, 1fr)) minmax(0, var(--c2, 1fr)) minmax(0, var(--c3, 1fr)); }
     .gr { display: block !important; }
 }
+
+/* Respect the OS "reduce motion" setting: no animated transitions (kept last so it wins the cascade) */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

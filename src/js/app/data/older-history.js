@@ -21,7 +21,7 @@ async function loadOlder() {
         if (rg)
             chart.timeScale().setVisibleLogicalRange({ from: rg.from + add.length, to: rg.to + add.length }); /* keep the view where it was */
     }
-    catch (e) { }
+    catch (err) { log.warn('older-history', err); }
     finally {
         if (my === tok) {
             loadingOld = false;

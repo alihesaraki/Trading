@@ -25,7 +25,7 @@ async function catchUp(force) {
         closeAt = e[6] + 1;
         window.IND && IND.tick();
     }
-    catch (_) { }
+    catch (err) { log.warn('history-sync', err); }
     finally {
         cuBusy = false;
     }
