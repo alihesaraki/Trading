@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-aeIdR9JX2/1b2Cu2/0EuvK5/rfHNXeiFhQ122qaDX1Y=' 'sha256-zXUIFu+8Mi54CYIu++2RqPRfyZwVuW5SBh4OynaeiHY=' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://fapi.binance.com wss://fstream.binance.com https://api.coingecko.com; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Binance Futures Chart</title>
 <meta name="description" content="Real-time Binance USDT-M Futures chart with indicators, drawing tools, bar replay and a watchlist.">
@@ -98,10 +99,14 @@ var P_K=fetch('https://fapi.binance.com/fapi/v1/klines?symbol='+SYM0+'&interval=
     'https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js'
   ];
   var APP = ['dist/app.js', 'dist/indicators.js', 'dist/drawings.js'];
+  /* Remote fallbacks must be byte-identical to the vendored 4.2.0 file (Subresource Integrity); a CDN copy that differs is rejected and the next source is tried.
+     Regenerate with: openssl dgst -sha384 -binary assets/vendor/lightweight-charts.standalone.production.js | openssl base64 -A */
+  var LIB_INTEGRITY = 'sha384-OK7vELvjHdhUFi31JYioPIcRHTROLdcDa6ZsNWgvgLaKj+9JqhU0Ad8g4wz3CXjA';
   function load(src, ok, fail) {
     var s = document.createElement('script');
     s.src = src;
     s.async = false;
+    if (/^https:/.test(src) && src.indexOf('lightweight-charts') >= 0) { s.integrity = LIB_INTEGRITY; s.crossOrigin = 'anonymous'; }
     s.onload = ok;
     s.onerror = function () { s.remove(); fail(); };
     document.head.appendChild(s);

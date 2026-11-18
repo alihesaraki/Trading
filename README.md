@@ -88,7 +88,7 @@ Trading/
 │
 ├── tests/
 │   ├── helpers/sources.mjs    # readSource(path), readCss() (concatenates CSS via the manifest)
-│   └── *.test.mjs             # node:test suites (64 tests)
+│   └── *.test.mjs             # node:test suites (unit tests, no browser needed)
 │
 └── docs/                      # ARCHITECTURE, DRAWINGS, PRICE_SCALE, MOBILE_RESPONSIVE,
                                #   RSI_IMPLEMENTATION, PERFORMANCE, KEYBOARD_SHORTCUTS, TECHNICAL_DEBT
@@ -184,7 +184,7 @@ Order (cascade matters): `tokens` → `base` → `topbar` → `chart-overlays` �
 
 ```bash
 npm run build           # regenerate dist/ from src/   (node scripts/build.mjs)
-npm test                # node --test tests/*.test.mjs (64 tests)
+npm test                # node --test tests/*.test.mjs (unit tests, no browser needed)
 npm run check:syntax    # node --check on dist/*.js and scripts/*.mjs
 ```
 
@@ -268,3 +268,14 @@ More detail: `docs/ARCHITECTURE.md`, `docs/DRAWINGS.md`, `docs/PRICE_SCALE.md`, 
 - Known, intentional limits: time zone is fixed to Asia/Tehran; `dist/*` is not minified.
 
 - **Multi-chart**: up to 4 charts side by side (button next to Indicators). One timeframe, one indicator list, one left drawing toolbar that acts on the active chart; the watchlist picks the coin of the active chart. See `docs/ARCHITECTURE.md` (Multi-chart) and `npm run test:e2e`.
+
+
+## Security, diagnostics and CI
+
+- **Content-Security-Policy** is set by a `<meta>` tag in `index.html` (scripts: self + the two inline scripts by sha256 hash + the three CDN fallbacks; connections: Binance REST/WS and CoinGecko only). If you edit either inline `<script>` in `index.html`, update its hash in the CSP; `tests/hardening.test.mjs` tells you which one is stale. Adding a new external host also needs a `connect-src` entry.
+- **Subresource Integrity:** CDN fallbacks load only if their bytes equal the vendored Lightweight Charts file (`LIB_INTEGRITY` in `index.html`). When you replace the vendored file, regenerate the hash (command in the comment next to it).
+- **Symbols from Binance** are rejected on ingest if they contain markup characters (`UNSAFE_SYMBOL_CHARS`, `data/ticker-data.js`) and are HTML-escaped in the watchlist template.
+- **Diagnostics:** swallowed, expected failures go through `log.warn(scope, err)` (`core/bootstrap.js`). Run `localStorage.setItem('debug','1')` and reload to see them in the console. Empty `catch` blocks are not allowed (tested).
+- **Accessibility:** watchlist rows are keyboard-operable (Tab, Arrow Up/Down, Enter/Space); `prefers-reduced-motion` is honoured (end of `src/styles/mobile.css`).
+- **CI:** `.github/workflows/ci.yml` runs the syntax check, rebuilds `dist/` and fails if it differs from the committed files, then runs the unit tests.
+- **Browser tests:** `python3 tests/e2e/multichart.e2e.py` (multi-chart; CSP bypassed because the harness evaluates strings) and `python3 tests/e2e/csp.e2e.py` (CSP enabled, keyboard, XSS symbol, `file://`).

@@ -36,7 +36,8 @@ def main():
     socks = []   # [{ws, subs:set}]
     with sync_playwright() as p:
         b = p.chromium.launch()
-        ctx = b.new_context(viewport={'width': 1500, 'height': 900})
+        # bypass_csp: the harness evaluates string expressions (wait_for_function), which the page's Content-Security-Policy forbids; CSP itself is covered by csp.e2e.py
+        ctx = b.new_context(viewport={'width': 1500, 'height': 900}, bypass_csp=True)
         page = ctx.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
